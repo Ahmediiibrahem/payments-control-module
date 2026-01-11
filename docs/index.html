@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cash Control Dashboard – مطالبات المشاريع</title>
+  <title>مطالبات المشاريع - Cash Control Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -173,6 +173,22 @@
   .mono{
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   }
+
+  .dq-row{
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.dq-row b{
+  color: var(--text);
+  font-weight: 800;
+}
+
+  
 </style>
 
 </head>
@@ -204,14 +220,14 @@
 
   <!-- Data Quality -->
 <div class="card" style="margin-top:12px;">
-  <div class="muted">Data Quality</div>
-  <div class="row small" style="margin-top:8px;">
+  <div class="dq-row">
     <div>إجمالي الصفوف: <b id="dq_total">—</b></div>
-    <div>صفوف مستبعدة (بدون مورد): <b id="dq_excluded_vendor">—</b></div>
-    <div>صفوف بدون مشروع: <b id="dq_missing_project">—</b></div>
+    <div>مستبعدة (بدون مورد): <b id="dq_excluded_vendor">—</b></div>
+    <div>بدون مشروع: <b id="dq_missing_project">—</b></div>
     <div>تواريخ غير صالحة: <b id="dq_bad_dates">—</b></div>
   </div>
 </div>
+
 
 
 <!-- Filters -->
