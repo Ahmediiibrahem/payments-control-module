@@ -1,4 +1,3 @@
-
 import { HEADER_MAP } from "./schema.js";
 
 let data = [];
@@ -37,22 +36,36 @@ function parseCSV(text) {
   return res.data || [];
 }
 
-// Time format: "413-1-11" => hhmm=413, month=1, day=11
-function parseTimeCodeDayKey(timeCode) {
-  const t = normText(timeCode);
-  if (!t) return "Unknown";
+// Accepts YYYY-MM-DD primarily; also M/D/YYYY (in case)
+function parseDateSmart(s) {
+  const t = normText(s);
+  if (!t || t === "-" || t === "0") return null;
 
-  const parts = t.split("-");
-  if (parts.length < 3) return "Unknown";
+  // YYYY-MM-DD
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  if (m) {
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    return isNaN(d.getTime()) ? null : d;
+  }
 
-  const month = Number(parts[1]);
-  const day = Number(parts[2]);
+  // M/D/YYYY or D/M/YYYY
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if (m) {
+    const a = +m[1], b = +m[2], y = +m[3];
+    let mm = a, dd = b;
+    if (a > 12) { dd = a; mm = b; }
+    const d = new Date(Date.UTC(y, mm - 1, dd));
+    return isNaN(d.getTime()) ? null : d;
+  }
 
-  if (!Number.isFinite(month) || !Number.isFinite(day) || month <= 0 || day <= 0) return "Unknown";
+  return null;
+}
 
-  const mm = String(month).padStart(2, "0");
-  const dd = String(day).padStart(2, "0");
-  return `${mm}-${dd}`;
+function formatDayKey(d) {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function normalizeRow(raw) {
@@ -65,25 +78,28 @@ function normalizeRow(raw) {
 
   const sectorLabel = normText(row.sector) || "(بدون قطاع)";
   const projectLabel = normText(row.project);
-  const timeCode = normText(row.time_code || row.Time); // supports both
 
   const sectorKey = normText(sectorLabel);
   const projectKey = normText(projectLabel);
-  const dayKey = parseTimeCodeDayKey(timeCode);
 
   if (sectorKey) sectorLabelByKey.set(sectorKey, sectorLabel);
   if (projectKey) projectLabelByKey.set(projectKey, projectLabel);
 
-  const vendor = normText(row.vendor); // still keep official rule same: vendor must exist
+  const vendor = normText(row.vendor); // official row rule
+  const timeCode = normText(row.time_code || row.Time || row.time); // Time column
+  const payReqRaw = normText(row.payment_request_date);
+  const payReqDate = parseDateSmart(payReqRaw);
+  const dayKey = payReqDate ? formatDayKey(payReqDate) : ""; // ✅ day comes from payment_request_date
 
   return {
     sectorKey,
     projectKey,
     sector: sectorLabel,
     project: projectLabel,
-    time_code: timeCode,
-    day_key: dayKey,
     vendor,
+    time_code: timeCode,
+    payment_request_date: payReqRaw,
+    day_key: dayKey, // YYYY-MM-DD
   };
 }
 
@@ -119,14 +135,12 @@ function applyFilters(rows) {
   const sectorKey = document.getElementById("sector").value;
   const projectLabel = document.getElementById("project").value;
   const projectKey = normText(projectLabel);
-  const dayKey = document.getElementById("day_key").value; // "MM-DD"
+  const dayKey = document.getElementById("day_key").value; // YYYY-MM-DD
 
   return rows.filter(r => {
-    // official row: must have vendor (same philosophy as main dashboard)
-    if (!r.vendor) return false;
-
-    // must have Time to count emails
-    if (!r.time_code) return false;
+    if (!r.vendor) return false;        // official
+    if (!r.time_code) return false;     // must have Time for unique email
+    if (!r.day_key) return false;       // must have payment_request_date valid
 
     if (sectorKey && r.sectorKey !== sectorKey) return false;
     if (projectKey && r.projectKey !== projectKey) return false;
@@ -136,7 +150,7 @@ function applyFilters(rows) {
   });
 }
 
-// Unique Email = unique time_code within sector+project+day_key
+// Unique email = unique time_code within sector + project + day_key
 function buildUniqueEmails(filteredRows) {
   const seen = new Set();
   const emails = [];
@@ -156,12 +170,12 @@ function renderChart(dayCounts) {
 
   const keys = Object.keys(dayCounts).sort();
   if (!keys.length) {
-    chart.innerHTML = `<div class="small">لا توجد بيانات بعد الفلاتر.</div>`;
+    chart.innerHTML = `<div class="small">لا توجد بيانات بعد الفلاتر (تأكد أن payment_request_date بصيغة YYYY-MM-DD وأن Time غير فارغ).</div>`;
     return;
   }
 
   const max = Math.max(...keys.map(k => dayCounts[k]));
-  keys.slice(-18).forEach(k => { // last 18 days shown to avoid crowding
+  keys.slice(-18).forEach(k => {
     const h = max ? Math.round((dayCounts[k] / max) * 100) : 0;
     const bar = document.createElement("div");
     bar.className = "bar";
@@ -178,14 +192,13 @@ function render() {
   const filtered = applyFilters(data);
   const uniqueEmails = buildUniqueEmails(filtered);
 
-  // KPIs
   const totalEmails = uniqueEmails.length;
 
   const daysSet = new Set(uniqueEmails.map(x => x.day_key));
   const daysCount = daysSet.size;
   const avg = daysCount ? (totalEmails / daysCount) : 0;
 
-  // top project
+  // Top project
   const byProject = new Map();
   for (const e of uniqueEmails) {
     const k = e.projectKey || "(بدون مشروع)";
@@ -199,7 +212,6 @@ function render() {
   const topProjectLabel = projectLabelByKey.get(topProjectKey) || topProjectKey || "—";
 
   document.getElementById("kpi_emails").textContent = totalEmails.toLocaleString("en-US");
-  document.getElementById("kpi_emails_hint").textContent = "مُحتسبة من Unique Time";
   document.getElementById("kpi_days").textContent = daysCount.toLocaleString("en-US");
   document.getElementById("kpi_avg").textContent = (Math.round(avg * 10) / 10).toLocaleString("en-US");
   document.getElementById("kpi_top_project").textContent = topProjectLabel || "—";
@@ -212,15 +224,15 @@ function render() {
   document.getElementById("meta").textContent =
     `المعروض: ${totalEmails} إيميل | قطاع: ${sectorSelText} | مشروع: ${projectSel} | يوم: ${daySel}`;
 
-  // Day counts (for chart)
+  // Counts per day
   const dayCounts = {};
   for (const e of uniqueEmails) {
     dayCounts[e.day_key] = (dayCounts[e.day_key] || 0) + 1;
   }
   renderChart(dayCounts);
 
-  // Summary table: day + sector + project
-  const summaryMap = new Map(); // key -> count
+  // Summary table
+  const summaryMap = new Map(); // day||sector||project -> count
   for (const e of uniqueEmails) {
     const key = `${e.day_key}||${e.sectorKey}||${e.projectKey}`;
     summaryMap.set(key, (summaryMap.get(key) || 0) + 1);
@@ -247,7 +259,7 @@ function render() {
     </tr>
   `).join("");
 
-  // Detail table: list unique emails (unique time codes)
+  // Detail table (unique emails)
   const details = uniqueEmails
     .slice()
     .sort((a, b) => (a.day_key.localeCompare(b.day_key)) || (a.project.localeCompare(b.project)) || (a.time_code.localeCompare(b.time_code)));
@@ -272,7 +284,7 @@ async function init() {
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
-  // Build sector->projects mapping
+  // sector -> projects
   projectsBySector = new Map();
   data.forEach(r => {
     if (!r.projectKey) return;
@@ -280,7 +292,7 @@ async function init() {
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
-  // Fill dropdowns
+  // dropdowns
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = document.getElementById("sector");
   sectorSel.innerHTML =
@@ -288,17 +300,18 @@ async function init() {
     sectorKeys.map(sk => `<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
-  setSelectOptions("day_key", data.map(r => r.day_key).filter(k => k !== "Unknown"), false, "الكل");
 
-  // Events
+  // day dropdown from payment_request_date (YYYY-MM-DD)
+  setSelectOptions("day_key", data.map(r => r.day_key).filter(Boolean), false, "الكل");
+
+  // events
   document.getElementById("sector").addEventListener("change", () => {
     rebuildProjectDropdownForSector();
     render();
   });
 
   ["project","day_key"].forEach(id => {
-    const el = document.getElementById(id);
-    el.addEventListener("change", render);
+    document.getElementById(id).addEventListener("change", render);
   });
 
   document.getElementById("clearBtn").addEventListener("click", () => {
@@ -308,12 +321,12 @@ async function init() {
     render();
   });
 
-  // Export CSV: unique emails list
+  // export unique emails list
   document.getElementById("exportBtn").addEventListener("click", () => {
     const filtered = applyFilters(data);
     const uniqueEmails = buildUniqueEmails(filtered);
 
-    const headers = ["day_key","sector","project","time_code"];
+    const headers = ["day_key","sector","project","time_code","payment_request_date"];
     const safe = (v) => {
       const s = String(v ?? "");
       return /[",\n]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
@@ -321,7 +334,13 @@ async function init() {
 
     const lines = [headers.join(",")];
     uniqueEmails.forEach(r => {
-      lines.push([safe(r.day_key), safe(r.sector), safe(r.project), safe(r.time_code)].join(","));
+      lines.push([
+        safe(r.day_key),
+        safe(r.sector),
+        safe(r.project),
+        safe(r.time_code),
+        safe(r.payment_request_date),
+      ].join(","));
     });
 
     const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
