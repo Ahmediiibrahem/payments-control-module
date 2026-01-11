@@ -2,9 +2,9 @@ import { HEADER_MAP } from "./schema.js";
 
 let data = [];
 
-let projectsBySector = new Map();     // sectorKey -> Set(projectKey)
-let sectorLabelByKey = new Map();     // sectorKey -> label
-let projectLabelByKey = new Map();    // projectKey -> label
+let projectsBySector = new Map();  // sectorKey -> Set(projectKey)
+let sectorLabelByKey = new Map();  // sectorKey -> label
+let projectLabelByKey = new Map(); // projectKey -> label
 
 // ============================
 // Helpers
@@ -44,7 +44,7 @@ function parseDateSmart(s) {
   if (m) {
     const a = +m[1], b = +m[2], y = +m[3];
     let mm = a, dd = b;
-    if (a > 12) { dd = a; mm = b; } // D/M/YYYY
+    if (a > 12) { dd = a; mm = b; }
     const d = new Date(Date.UTC(y, mm - 1, dd));
     return isNaN(d.getTime()) ? null : d;
   }
@@ -101,6 +101,7 @@ function normalizeRow(raw) {
   const projectLabel = normText(row.project);
   const accountItem = normText(row.account_item);
   const status = normText(row.status);
+
   const requestId = normText(row.request_id);
   const code = normText(row.code);
   const vendor = normalizeVendor(row.vendor);
@@ -213,7 +214,7 @@ function applyFilters(rows, { ignoreStatus = false } = {}) {
       if (to && d.getTime() > to.getTime()) return false;
     }
 
-    // ✅ Status filter (ONLY if not ignored)
+    // Status filter affects table only
     if (!ignoreStatus) {
       if (statusValue === "Paid") {
         if (!(r.amount_remaining === 0 && r.amount_paid > 0)) return false;
@@ -221,19 +222,6 @@ function applyFilters(rows, { ignoreStatus = false } = {}) {
       if (statusValue === "Pending") {
         if (!(r.amount_remaining > 0)) return false;
       }
-    }
-
-    return true;
-  });
-}
-
-
-    // Date filter
-    if (from || to) {
-      const d = (dateType === "payment_request_date") ? r._payReqDate : r._srcDate;
-      if (!d) return false;
-      if (from && d.getTime() < from.getTime()) return false;
-      if (to && d.getTime() > to.getTime()) return false;
     }
 
     return true;
@@ -272,13 +260,13 @@ function render() {
   document.getElementById("dq_missing_project").textContent = dq.missingProject;
   document.getElementById("dq_bad_dates").textContent = dq.badDates;
 
-  // ✅ Base filters (without status) -> KPIs depend on this
+  // Base filtered (without status) -> KPIs
   const baseFiltered = applyFilters(data, { ignoreStatus: true });
 
-  // ✅ Table filters (with status) -> Table depends on this only
+  // Table filtered (with status) -> Table
   const tableFiltered = applyFilters(data, { ignoreStatus: false });
 
-  // KPIs (use baseFiltered)
+  // KPIs
   const total = baseFiltered.reduce((a, x) => a + x.amount_total, 0);
   const paid = baseFiltered.reduce((a, x) => a + x.amount_paid, 0);
   const pending = baseFiltered.reduce((a, x) => a + x.amount_remaining, 0);
@@ -289,7 +277,6 @@ function render() {
   document.getElementById("kpi_pending").textContent = fmtMoney(pending);
   document.getElementById("kpi_canceled").textContent = fmtMoney(canceled);
 
-  // counts (خليها تعكس عدد صفوف الجدول أو القاعدة — أنا بفضل الجدول)
   document.getElementById("kpi_count").textContent = `عدد المطالبات: ${baseFiltered.length}`;
   document.getElementById("kpi_paid_count").textContent = `عدد السجلات: ${baseFiltered.length}`;
   document.getElementById("kpi_pending_count").textContent = `عدد السجلات: ${baseFiltered.length}`;
@@ -305,7 +292,7 @@ function render() {
   document.getElementById("meta").textContent =
     `المعروض: ${tableFiltered.length} | قطاع: ${sectorSelText} | مشروع: ${projectSel} | بند: ${accSel} | حالة: ${stLabel}`;
 
-  // Table (use tableFiltered)
+  // Table
   const tbody = document.getElementById("rows");
   tbody.innerHTML = tableFiltered.map(r => `
     <tr>
@@ -325,7 +312,6 @@ function render() {
     </tr>
   `).join("");
 }
-
 
 // ============================
 // Init
@@ -355,13 +341,13 @@ async function init() {
     `<option value="">الكل</option>` +
     sectorKeys.map(sk => `<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
-  // Projects (all initially)
+  // Project dropdown initially all projects
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
 
-  // Account item (global)
+  // Account item dropdown (global)
   setSelectOptions("account_item", data.map(r => r.account_item));
 
-  // Status dropdown fixed: All / Paid / Pending
+  // Status dropdown fixed
   const statusSel = document.getElementById("status");
   statusSel.innerHTML = `
     <option value="">All</option>
@@ -394,11 +380,11 @@ async function init() {
     render();
   });
 
-  // Export button (Optional - if you already had an export workflow, keep it there)
+  // Export CSV (current table view)
   const exportBtn = document.getElementById("exportBtn");
   if (exportBtn) {
     exportBtn.addEventListener("click", () => {
-      const filtered = applyFilters(data);
+      const tableFiltered = applyFilters(data, { ignoreStatus: false });
 
       const headers = [
         "sector","project","account_item",
@@ -413,7 +399,7 @@ async function init() {
       };
 
       const lines = [headers.join(",")];
-      filtered.forEach(r => {
+      tableFiltered.forEach(r => {
         lines.push([
           safe(r.sector),
           safe(r.project),
