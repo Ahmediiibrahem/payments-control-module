@@ -2,16 +2,16 @@ import { HEADER_MAP } from "./schema.js";
 
 let data = [];
 
-let projectsBySector = new Map(); // normalized sector -> Set(normalized projects)
-let sectorLabelByKey = new Map(); // normalized sector -> original label
-let projectLabelByKey = new Map(); // normalized project -> original label
+let projectsBySector = new Map();     // sectorKey -> Set(projectKey)
+let sectorLabelByKey = new Map();     // sectorKey -> label
+let projectLabelByKey = new Map();    // projectKey -> label
 
 // ============================
-// Text / Number / Date Helpers
+// Helpers
 // ============================
 function normText(x) {
   return String(x ?? "")
-    .replace(/[\u200E\u200F\u202A-\u202E]/g, "") // RTL marks
+    .replace(/[\u200E\u200F\u202A-\u202E]/g, "")
     .replace(/\r?\n/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -43,11 +43,8 @@ function parseDateSmart(s) {
   m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
   if (m) {
     const a = +m[1], b = +m[2], y = +m[3];
-
-    // heuristic: if first > 12 then it's D/M/YYYY
     let mm = a, dd = b;
-    if (a > 12) { dd = a; mm = b; }
-
+    if (a > 12) { dd = a; mm = b; } // D/M/YYYY
     const d = new Date(Date.UTC(y, mm - 1, dd));
     return isNaN(d.getTime()) ? null : d;
   }
@@ -65,14 +62,14 @@ function normalizeVendor(v) {
 
 function normalizeHeaderKey(h) {
   return String(h ?? "")
-    .replace(/\ufeff/g, "") // BOM
+    .replace(/\ufeff/g, "")
     .replace(/\r?\n/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 // ============================
-// CSV Parse (PapaParse)
+// CSV Parse
 // ============================
 function parseCSV(text) {
   const res = Papa.parse(text, {
@@ -89,7 +86,7 @@ function parseCSV(text) {
 }
 
 // ============================
-// Row Normalization (Contract)
+// Normalize Row
 // ============================
 function normalizeRow(raw) {
   const row = {};
@@ -111,18 +108,13 @@ function normalizeRow(raw) {
   const sectorKey = normText(sectorLabel);
   const projectKey = normText(projectLabel);
 
-  // keep original labels for dropdown display
   if (sectorKey) sectorLabelByKey.set(sectorKey, sectorLabel);
   if (projectKey) projectLabelByKey.set(projectKey, projectLabel);
 
   return {
-    // normalized “keys” for filtering
     sectorKey,
     projectKey,
-    accountItemKey: normText(accountItem),
-    statusKey: normText(status),
 
-    // display labels
     sector: sectorLabel,
     project: projectLabel,
     account_item: accountItem,
@@ -148,7 +140,7 @@ function normalizeRow(raw) {
 }
 
 // ============================
-// Dropdown helpers
+// Dropdown Helpers
 // ============================
 function uniqSorted(arr) {
   return Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -168,11 +160,11 @@ function setSelectOptions(id, values, keepValue = false) {
 }
 
 function rebuildProjectDropdownForSector() {
-  const sectorKey = document.getElementById("sector").value; // stores sectorKey
-  const projectsSet = sectorKey ? (projectsBySector.get(sectorKey) || new Set()) : null;
+  const sectorKey = document.getElementById("sector").value;
+  const setProjects = sectorKey ? (projectsBySector.get(sectorKey) || new Set()) : null;
 
   const projects = sectorKey
-    ? Array.from(projectsSet).map(pk => projectLabelByKey.get(pk) || pk)
+    ? Array.from(setProjects).map(pk => projectLabelByKey.get(pk) || pk)
     : Array.from(projectLabelByKey.values());
 
   setSelectOptions("project", projects, true);
@@ -193,28 +185,37 @@ function getFilterDates() {
 }
 
 function applyFilters(rows) {
-  const sectorKey = document.getElementById("sector").value; // we store key
-  const projectLabel = document.getElementById("project").value; // label
+  const sectorKey = document.getElementById("sector").value;
+  const projectLabel = document.getElementById("project").value;
   const projectKey = normText(projectLabel);
 
   const accountItemLabel = document.getElementById("account_item").value;
-  const statusLabel = document.getElementById("status").value;
-
   const accountItemKey = normText(accountItemLabel);
-  const statusKey = normText(statusLabel);
+
+  const statusValue = document.getElementById("status").value; // "", "Paid", "Pending"
 
   const dateType = document.getElementById("date_type").value;
   const { from, to } = getFilterDates();
 
   return rows.filter(r => {
-    // official rule
+    // Official row rule
     if (!r.vendor) return false;
 
     if (sectorKey && r.sectorKey !== sectorKey) return false;
     if (projectKey && r.projectKey !== projectKey) return false;
-    if (accountItemKey && r.accountItemKey !== accountItemKey) return false;
-    if (statusKey && r.statusKey !== statusKey) return false;
+    if (accountItemKey && normText(r.account_item) !== accountItemKey) return false;
 
+    // Status filter: only Paid / Pending
+    if (statusValue === "Paid") {
+      // Paid = remaining == 0 AND has paid amount
+      if (!(r.amount_remaining === 0 && r.amount_paid > 0)) return false;
+    }
+    if (statusValue === "Pending") {
+      // Pending = still has remaining
+      if (!(r.amount_remaining > 0)) return false;
+    }
+
+    // Date filter
     if (from || to) {
       const d = (dateType === "payment_request_date") ? r._payReqDate : r._srcDate;
       if (!d) return false;
@@ -251,35 +252,41 @@ function computeDataQuality(allRows) {
 // Render
 // ============================
 function render() {
-  // Quality
+  // Quality (all rows)
   const dq = computeDataQuality(data);
   document.getElementById("dq_total").textContent = dq.total;
   document.getElementById("dq_excluded_vendor").textContent = dq.excludedVendor;
   document.getElementById("dq_missing_project").textContent = dq.missingProject;
   document.getElementById("dq_bad_dates").textContent = dq.badDates;
 
+  // Filtered rows
   const filtered = applyFilters(data);
 
   // KPIs
   const total = filtered.reduce((a, x) => a + x.amount_total, 0);
   const paid = filtered.reduce((a, x) => a + x.amount_paid, 0);
-  const rem = filtered.reduce((a, x) => a + x.amount_remaining, 0);
+  const pending = filtered.reduce((a, x) => a + x.amount_remaining, 0);
+  const canceled = filtered.reduce((a, x) => a + x.amount_canceled, 0);
 
   document.getElementById("kpi_total").textContent = fmtMoney(total);
   document.getElementById("kpi_paid").textContent = fmtMoney(paid);
-  document.getElementById("kpi_remaining").textContent = fmtMoney(rem);
+  document.getElementById("kpi_pending").textContent = fmtMoney(pending);
+  document.getElementById("kpi_canceled").textContent = fmtMoney(canceled);
 
   document.getElementById("kpi_count").textContent = `عدد المطالبات: ${filtered.length}`;
   document.getElementById("kpi_paid_count").textContent = `عدد السجلات: ${filtered.length}`;
-  document.getElementById("kpi_remaining_count").textContent = `عدد السجلات: ${filtered.length}`;
+  document.getElementById("kpi_pending_count").textContent = `عدد السجلات: ${filtered.length}`;
+  document.getElementById("kpi_canceled_count").textContent = `عدد السجلات: ${filtered.length}`;
 
-  // Meta (to confirm filters are applied)
-  const sectorSel = document.getElementById("sector").selectedOptions[0]?.textContent || "الكل";
+  // Meta
+  const sectorSelText = document.getElementById("sector").selectedOptions[0]?.textContent || "الكل";
   const projectSel = document.getElementById("project").value || "الكل";
   const accSel = document.getElementById("account_item").value || "الكل";
-  const stSel = document.getElementById("status").value || "الكل";
+  const st = document.getElementById("status").value;
+  const stLabel = st === "" ? "All" : st;
+
   document.getElementById("meta").textContent =
-    `المعروض: ${filtered.length} | قطاع: ${sectorSel} | مشروع: ${projectSel} | بند: ${accSel} | حالة: ${stSel}`;
+    `المعروض: ${filtered.length} | قطاع: ${sectorSelText} | مشروع: ${projectSel} | بند: ${accSel} | حالة: ${stLabel}`;
 
   // Table
   const tbody = document.getElementById("rows");
@@ -315,33 +322,36 @@ async function init() {
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
-  // Build sector -> projects mapping based on normalized keys
+  // Build sector -> projects mapping
   projectsBySector = new Map();
-  sectorLabelByKey = new Map(sectorLabelByKey);
-  projectLabelByKey = new Map(projectLabelByKey);
-
   data.forEach(r => {
     if (!r.projectKey) return;
     if (!projectsBySector.has(r.sectorKey)) projectsBySector.set(r.sectorKey, new Set());
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
-  // Fill dropdowns:
-  // sector dropdown stores sectorKey, but displays original label
+  // Sector dropdown stores sectorKey, displays label
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = document.getElementById("sector");
   sectorSel.innerHTML =
     `<option value="">الكل</option>` +
     sectorKeys.map(sk => `<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
-  // project (initially: all projects)
+  // Projects (all initially)
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
 
-  // global filters
+  // Account item (global)
   setSelectOptions("account_item", data.map(r => r.account_item));
-  setSelectOptions("status", data.map(r => r.status));
 
-  // Events (this is what was missing غالباً)
+  // Status dropdown fixed: All / Paid / Pending
+  const statusSel = document.getElementById("status");
+  statusSel.innerHTML = `
+    <option value="">All</option>
+    <option value="Paid">Paid</option>
+    <option value="Pending">Pending</option>
+  `;
+
+  // Events
   document.getElementById("sector").addEventListener("change", () => {
     rebuildProjectDropdownForSector();
     render();
@@ -365,6 +375,56 @@ async function init() {
 
     render();
   });
+
+  // Export button (Optional - if you already had an export workflow, keep it there)
+  const exportBtn = document.getElementById("exportBtn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => {
+      const filtered = applyFilters(data);
+
+      const headers = [
+        "sector","project","account_item",
+        "request_id","code","vendor",
+        "amount_total","amount_paid","amount_canceled","amount_remaining",
+        "source_request_date","payment_request_date","approval_date","payment_date"
+      ];
+
+      const safe = (v) => {
+        const s = String(v ?? "");
+        return /[",\n]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
+      };
+
+      const lines = [headers.join(",")];
+      filtered.forEach(r => {
+        lines.push([
+          safe(r.sector),
+          safe(r.project),
+          safe(r.account_item),
+          safe(r.request_id),
+          safe(r.code),
+          safe(r.vendor),
+          r.amount_total,
+          r.amount_paid,
+          r.amount_canceled,
+          r.amount_remaining,
+          safe(r.source_request_date),
+          safe(r.payment_request_date),
+          safe(r.approval_date),
+          safe(r.payment_date)
+        ].join(","));
+      });
+
+      const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "export_filtered.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+  }
 
   render();
 }
