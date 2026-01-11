@@ -1,93 +1,89 @@
-import { COLUMNS, HEADER_MAP } from "./schema.js";
+import { HEADER_MAP } from "./schema.js";
 
 let data = [];
 
-function toNumber(x){
-  const n = Number(String(x || "").replace(/,/g,""));
-  return isNaN(n) ? 0 : n;
+// ============================
+// Utils
+// ============================
+function toNumber(x) {
+  const s = String(x ?? "").trim();
+  if (!s) return 0;
+  const n = Number(s.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
 }
 
-function fmtMoney(n){
-  return (n || 0).toLocaleString("en-US");
+function fmtMoney(n) {
+  return (n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-function parseDateISO(s){
-  if(!s) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  return m ? new Date(Date.UTC(+m[1],+m[2]-1,+m[3])) : null;
+function parseDateISO(s) {
+  const t = String(s ?? "").trim();
+  if (!t) return null;
+
+  // Expect YYYY-MM-DD (we’ll enhance later to accept M/D/YYYY if needed)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if (!m) return null;
+
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return isNaN(d.getTime()) ? null : d;
 }
 
-function normalizeVendor(v){
-  const t = String(v||"").replace(/[\u200E\u200F\u202A-\u202E]/g,"").trim();
-  if(!t || t==="-" || t==="0" || t.toLowerCase()==="null") return "";
+function normalizeVendor(v) {
+  const t = String(v ?? "")
+    .replace(/[\u200E\u200F\u202A-\u202E]/g, "")
+    .trim();
+
+  if (!t) return "";
+  const lower = t.toLowerCase();
+  if (t === "-" || t === "0" || lower === "null" || lower === "none") return "";
+
   return t;
 }
 
-
-function normalizeHeaderKey(h){
+function normalizeHeaderKey(h) {
   return String(h ?? "")
-    .replace(/\ufeff/g, "")          // remove BOM
-    .replace(/\r?\n/g, " ")          // remove newlines in header
-    .replace(/\s+/g, " ")            // collapse spaces
+    .replace(/\ufeff/g, "")    // BOM
+    .replace(/\r?\n/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function detectDelimiter(text){
-  const firstLine = (text.split(/\r?\n/).find(l => l.trim().length) || "");
-  const commas = (firstLine.match(/,/g) || []).length;
-  const tabs = (firstLine.match(/\t/g) || []).length;
-  const semis = (firstLine.match(/;/g) || []).length;
-
-  // choose the strongest signal
-  if (tabs > commas && tabs > semis) return "\t";
-  if (semis > commas && semis > tabs) return ";";
-  return ","; // default CSV
-}
-
-function parseCSV(text){
+// ============================
+// CSV
+// ============================
+function parseCSV(text) {
   const res = Papa.parse(text, {
     header: true,
     skipEmptyLines: true,
     dynamicTyping: false,
-    transformHeader: (h) => normalizeHeaderKey(h) // ✅ critical
+    transformHeader: (h) => normalizeHeaderKey(h), // ✅ critical
   });
 
-  if (res.errors && res.errors.length){
+  if (res.errors && res.errors.length) {
     console.warn("CSV parse errors (first 10):", res.errors.slice(0, 10));
   }
   return res.data || [];
 }
 
-
-
-  if (res.errors && res.errors.length){
-    console.warn("CSV parse errors (first 10):", res.errors.slice(0, 10));
-  }
-
-  return res.data || [];
-}
-
-
-function normalizeRow(raw){
+function normalizeRow(raw) {
   const row = {};
 
-  Object.entries(raw).forEach(([key,value])=>{
-  const kNorm = normalizeHeaderKey(key);
-  const mapped = HEADER_MAP[kNorm] || kNorm;  // لو إنجليزي هيعدي زي ما هو
-  row[mapped] = value;
-});
-
+  Object.entries(raw).forEach(([key, value]) => {
+    const kNorm = normalizeHeaderKey(key);
+    const mapped = HEADER_MAP[kNorm] || kNorm; // English passes through
+    row[mapped] = value;
+  });
 
   const vendor = normalizeVendor(row.vendor);
 
   return {
-    sector: String(row.sector || "").trim(),
-    project: String(row.project || "").trim(),
-    account_item: String(row.account_item || "").trim(),
-    status: String(row.status || "").trim(),
+    sector: String(row.sector ?? "").trim(),
+    project: String(row.project ?? "").trim(),
+    account_item: String(row.account_item ?? "").trim(),
+    status: String(row.status ?? "").trim(),
 
-    request_id: String(row.request_id || "").trim(),
-    code: String(row.code || "").trim(),
+    request_id: String(row.request_id ?? "").trim(),
+    code: String(row.code ?? "").trim(),
     vendor,
 
     amount_total: toNumber(row.amount_total),
@@ -95,56 +91,33 @@ function normalizeRow(raw){
     amount_canceled: toNumber(row.amount_canceled),
     amount_remaining: toNumber(row.amount_remaining),
 
-    source_request_date: String(row.source_request_date || "").trim(),
-    payment_request_date: String(row.payment_request_date || "").trim(),
-    approval_date: String(row.approval_date || "").trim(),
-    payment_date: String(row.payment_date || "").trim(),
+    source_request_date: String(row.source_request_date ?? "").trim(),
+    payment_request_date: String(row.payment_request_date ?? "").trim(),
+    approval_date: String(row.approval_date ?? "").trim(),
+    payment_date: String(row.payment_date ?? "").trim(),
 
     _srcDate: parseDateISO(row.source_request_date),
-    _payReqDate: parseDateISO(row.payment_request_date)
+    _payReqDate: parseDateISO(row.payment_request_date),
   };
 }
 
-
-
-  const vendor = normalizeVendor(row.vendor);
-
-  return {
-    sector: String(row.sector || "").trim(),
-    project: String(row.project || "").trim(),
-    account_item: String(row.account_item || "").trim(),
-    status: String(row.status || "").trim(),
-
-    request_id: String(row.request_id || "").trim(),
-    code: String(row.code || "").trim(),
-    vendor,
-
-    amount_total: toNumber(row.amount_total),
-    amount_paid: toNumber(row.amount_paid),
-    amount_canceled: toNumber(row.amount_canceled),
-    amount_remaining: toNumber(row.amount_remaining),
-
-    source_request_date: String(row.source_request_date || "").trim(),
-    payment_request_date: String(row.payment_request_date || "").trim(),
-    approval_date: String(row.approval_date || "").trim(),
-    payment_date: String(row.payment_date || "").trim(),
-
-    _srcDate: parseDateISO(row.source_request_date),
-    _payReqDate: parseDateISO(row.payment_request_date)
-  };
+// ============================
+// Rules / Filters
+// ============================
+function applyFilters(rows) {
+  // ✅ Official row rule: vendor must exist
+  return rows.filter((r) => !!r.vendor);
 }
 
-
-function applyFilters(rows){
-  return rows.filter(r => r.vendor);
-}
-
-function computeDataQuality(allRows){
+// ============================
+// Data Quality
+// ============================
+function computeDataQuality(allRows) {
   let excludedVendor = 0;
   let missingProject = 0;
   let badDates = 0;
 
-  allRows.forEach(r => {
+  allRows.forEach((r) => {
     if (!r.vendor) excludedVendor++;
     if (!r.project) missingProject++;
 
@@ -156,43 +129,46 @@ function computeDataQuality(allRows){
     }
   });
 
-  return {
-    total: allRows.length,
-    excludedVendor,
-    missingProject,
-    badDates
-  };
+  return { total: allRows.length, excludedVendor, missingProject, badDates };
 }
 
-
-function render(){
-
+// ============================
+// Render
+// ============================
+function render() {
+  // Data Quality (all rows)
   const dq = computeDataQuality(data);
+  const elTotal = document.getElementById("dq_total");
+  if (elTotal) {
+    document.getElementById("dq_total").textContent = dq.total;
+    document.getElementById("dq_excluded_vendor").textContent = dq.excludedVendor;
+    document.getElementById("dq_missing_project").textContent = dq.missingProject;
+    document.getElementById("dq_bad_dates").textContent = dq.badDates;
+  }
 
-document.getElementById("dq_total").textContent = dq.total;
-document.getElementById("dq_excluded_vendor").textContent = dq.excludedVendor;
-document.getElementById("dq_missing_project").textContent = dq.missingProject;
-document.getElementById("dq_bad_dates").textContent = dq.badDates;
-
-  
+  // Filtered (official rows only)
   const filtered = applyFilters(data);
 
-  
-
   document.getElementById("kpi_total").textContent =
-    fmtMoney(filtered.reduce((a,x)=>a+x.amount_total,0));
+    fmtMoney(filtered.reduce((a, x) => a + x.amount_total, 0));
 
   document.getElementById("kpi_paid").textContent =
-    fmtMoney(filtered.reduce((a,x)=>a+x.amount_paid,0));
+    fmtMoney(filtered.reduce((a, x) => a + x.amount_paid, 0));
 
   document.getElementById("kpi_remaining").textContent =
-    fmtMoney(filtered.reduce((a,x)=>a+x.amount_remaining,0));
+    fmtMoney(filtered.reduce((a, x) => a + x.amount_remaining, 0));
 
   document.getElementById("kpi_count").textContent =
     `عدد المطالبات: ${filtered.length}`;
 
+  document.getElementById("kpi_paid_count").textContent =
+    `عدد السجلات: ${filtered.length}`;
+
+  document.getElementById("kpi_remaining_count").textContent =
+    `عدد السجلات: ${filtered.length}`;
+
   const tbody = document.getElementById("rows");
-  tbody.innerHTML = filtered.map(r=>`
+  tbody.innerHTML = filtered.map((r) => `
     <tr>
       <td>${r.request_id}</td>
       <td>${r.code}</td>
@@ -211,8 +187,15 @@ document.getElementById("dq_bad_dates").textContent = dq.badDates;
   `).join("");
 }
 
-async function init(){
-  const res = await fetch("./data.csv",{cache:"no-store"});
+// ============================
+// Init
+// ============================
+async function init() {
+  const res = await fetch("./data.csv", { cache: "no-store" });
+  if (!res.ok) {
+    alert("مش قادر أقرأ data.csv — تأكد إنه موجود في docs/");
+    return;
+  }
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
   render();
