@@ -184,7 +184,7 @@ function getFilterDates() {
   return { from, to };
 }
 
-function applyFilters(rows) {
+function applyFilters(rows, { ignoreStatus = false } = {}) {
   const sectorKey = document.getElementById("sector").value;
   const projectLabel = document.getElementById("project").value;
   const projectKey = normText(projectLabel);
@@ -205,15 +205,28 @@ function applyFilters(rows) {
     if (projectKey && r.projectKey !== projectKey) return false;
     if (accountItemKey && normText(r.account_item) !== accountItemKey) return false;
 
-    // Status filter: only Paid / Pending
-    if (statusValue === "Paid") {
-      // Paid = remaining == 0 AND has paid amount
-      if (!(r.amount_remaining === 0 && r.amount_paid > 0)) return false;
+    // Date filter
+    if (from || to) {
+      const d = (dateType === "payment_request_date") ? r._payReqDate : r._srcDate;
+      if (!d) return false;
+      if (from && d.getTime() < from.getTime()) return false;
+      if (to && d.getTime() > to.getTime()) return false;
     }
-    if (statusValue === "Pending") {
-      // Pending = still has remaining
-      if (!(r.amount_remaining > 0)) return false;
+
+    // ✅ Status filter (ONLY if not ignored)
+    if (!ignoreStatus) {
+      if (statusValue === "Paid") {
+        if (!(r.amount_remaining === 0 && r.amount_paid > 0)) return false;
+      }
+      if (statusValue === "Pending") {
+        if (!(r.amount_remaining > 0)) return false;
+      }
     }
+
+    return true;
+  });
+}
+
 
     // Date filter
     if (from || to) {
@@ -259,24 +272,28 @@ function render() {
   document.getElementById("dq_missing_project").textContent = dq.missingProject;
   document.getElementById("dq_bad_dates").textContent = dq.badDates;
 
-  // Filtered rows
-  const filtered = applyFilters(data);
+  // ✅ Base filters (without status) -> KPIs depend on this
+  const baseFiltered = applyFilters(data, { ignoreStatus: true });
 
-  // KPIs
-  const total = filtered.reduce((a, x) => a + x.amount_total, 0);
-  const paid = filtered.reduce((a, x) => a + x.amount_paid, 0);
-  const pending = filtered.reduce((a, x) => a + x.amount_remaining, 0);
-  const canceled = filtered.reduce((a, x) => a + x.amount_canceled, 0);
+  // ✅ Table filters (with status) -> Table depends on this only
+  const tableFiltered = applyFilters(data, { ignoreStatus: false });
+
+  // KPIs (use baseFiltered)
+  const total = baseFiltered.reduce((a, x) => a + x.amount_total, 0);
+  const paid = baseFiltered.reduce((a, x) => a + x.amount_paid, 0);
+  const pending = baseFiltered.reduce((a, x) => a + x.amount_remaining, 0);
+  const canceled = baseFiltered.reduce((a, x) => a + x.amount_canceled, 0);
 
   document.getElementById("kpi_total").textContent = fmtMoney(total);
   document.getElementById("kpi_paid").textContent = fmtMoney(paid);
   document.getElementById("kpi_pending").textContent = fmtMoney(pending);
   document.getElementById("kpi_canceled").textContent = fmtMoney(canceled);
 
-  document.getElementById("kpi_count").textContent = `عدد المطالبات: ${filtered.length}`;
-  document.getElementById("kpi_paid_count").textContent = `عدد السجلات: ${filtered.length}`;
-  document.getElementById("kpi_pending_count").textContent = `عدد السجلات: ${filtered.length}`;
-  document.getElementById("kpi_canceled_count").textContent = `عدد السجلات: ${filtered.length}`;
+  // counts (خليها تعكس عدد صفوف الجدول أو القاعدة — أنا بفضل الجدول)
+  document.getElementById("kpi_count").textContent = `عدد المطالبات: ${baseFiltered.length}`;
+  document.getElementById("kpi_paid_count").textContent = `عدد السجلات: ${baseFiltered.length}`;
+  document.getElementById("kpi_pending_count").textContent = `عدد السجلات: ${baseFiltered.length}`;
+  document.getElementById("kpi_canceled_count").textContent = `عدد السجلات: ${baseFiltered.length}`;
 
   // Meta
   const sectorSelText = document.getElementById("sector").selectedOptions[0]?.textContent || "الكل";
@@ -286,11 +303,11 @@ function render() {
   const stLabel = st === "" ? "All" : st;
 
   document.getElementById("meta").textContent =
-    `المعروض: ${filtered.length} | قطاع: ${sectorSelText} | مشروع: ${projectSel} | بند: ${accSel} | حالة: ${stLabel}`;
+    `المعروض: ${tableFiltered.length} | قطاع: ${sectorSelText} | مشروع: ${projectSel} | بند: ${accSel} | حالة: ${stLabel}`;
 
-  // Table
+  // Table (use tableFiltered)
   const tbody = document.getElementById("rows");
-  tbody.innerHTML = filtered.map(r => `
+  tbody.innerHTML = tableFiltered.map(r => `
     <tr>
       <td>${r.request_id}</td>
       <td>${r.code}</td>
@@ -308,6 +325,7 @@ function render() {
     </tr>
   `).join("");
 }
+
 
 // ============================
 // Init
