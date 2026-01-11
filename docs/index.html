@@ -1,1 +1,176 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cash Control Dashboard – مطالبات المشاريع</title>
+
+  <style>
+    :root{
+      --bg:#ffffff;
+      --muted:#666;
+      --border:#eee;
+      --shadow:0 2px 14px rgba(0,0,0,.06);
+      --card:#fff;
+    }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Tahoma, Arial;
+      margin: 22px;
+      background:var(--bg);
+      color:#111;
+    }
+    h1 { margin: 0 0 10px; font-size: 22px; }
+    .muted { color:var(--muted); font-size:13px; }
+
+    .grid { display:grid; gap:12px; }
+    .grid.kpi { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+    @media (max-width: 900px){ .grid.kpi { grid-template-columns: 1fr; } }
+
+    .card {
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      box-shadow: var(--shadow);
+    }
+
+    .kpi .value { font-size: 22px; font-weight: 700; margin-top: 6px; }
+    .small { font-size:12px; color:var(--muted); }
+
+    .row {
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    input, select, button {
+      padding:10px 12px;
+      border:1px solid #ccc;
+      border-radius:12px;
+      font-size:14px;
+      background:#fff;
+    }
+
+    label { display:flex; gap:8px; align-items:center; }
+    button { cursor:pointer; }
+    button:hover { background:#fafafa; }
+
+    table {
+      width:100%;
+      border-collapse:collapse;
+      margin-top:10px;
+    }
+
+    th, td {
+      padding:10px;
+      border-bottom:1px solid var(--border);
+      text-align:right;
+      vertical-align:top;
+    }
+
+    th {
+      background:#fafafa;
+      position:sticky;
+      top:0;
+      z-index:1;
+    }
+
+    .table-wrap {
+      overflow:auto;
+      max-height: 70vh;
+      border:1px solid var(--border);
+      border-radius:14px;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Cash Control Dashboard – مطالبات المشاريع</h1>
+
+<!-- KPIs -->
+<div class="grid kpi">
+  <div class="card kpi">
+    <div class="muted">إجمالي المطالبات</div>
+    <div class="value" id="kpi_total">—</div>
+    <div class="small" id="kpi_count">—</div>
+  </div>
+
+  <div class="card kpi">
+    <div class="muted">إجمالي المنصرف</div>
+    <div class="value" id="kpi_paid">—</div>
+    <div class="small" id="kpi_paid_count">—</div>
+  </div>
+
+  <div class="card kpi">
+    <div class="muted">إجمالي المتبقي</div>
+    <div class="value" id="kpi_remaining">—</div>
+    <div class="small" id="kpi_remaining_count">—</div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-top:12px;">
+  <div class="row">
+    <label>القطاع: <select id="sector"></select></label>
+    <label>المشروع: <select id="project"></select></label>
+    <label>بند الحسابات: <select id="account_item"></select></label>
+    <label>الحالة: <select id="status"></select></label>
+
+    <label>نوع التاريخ:
+      <select id="date_type">
+        <option value="source_request_date">تاريخ الطلب (من المشروع)</option>
+        <option value="payment_request_date">تاريخ طلب الصرف</option>
+      </select>
+    </label>
+
+    <label>من: <input id="date_from" type="date"></label>
+    <label>إلى: <input id="date_to" type="date"></label>
+
+    <button id="clearBtn">مسح</button>
+    <button id="exportBtn">تصدير CSV</button>
+  </div>
+
+  <div class="small" style="margin-top:10px;">
+    المعروض الآن: <span id="meta">—</span>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card" style="margin-top:12px;">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>رقم الطلب</th>
+          <th>الكود</th>
+          <th>المورد</th>
+          <th>المبلغ</th>
+          <th>المنصرف</th>
+          <th>الملغي</th>
+          <th>المتبقي</th>
+          <th>بند الحسابات</th>
+          <th>المشروع</th>
+          <th>تاريخ الطلب</th>
+          <th>طلب الصرف</th>
+          <th>التعميد</th>
+          <th>الصرف</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- CSV Parser -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<!-- App -->
+<script src="./src/app.js"></script>
+</body>
+</html>
 
