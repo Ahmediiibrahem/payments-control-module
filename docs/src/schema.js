@@ -24,4 +24,9 @@ export const HEADER_MAP = {
   "تاريخ طلب الصرف": "payment_request_date",
   "تاريخ التعميد": "approval_date",
   "تاريخ الصرف": "payment_date",
+
+  // ✅ new column for email unique id
+  "Time": "time_code",
+  "time": "time_code",
+  "TIME": "time_code",
 };
