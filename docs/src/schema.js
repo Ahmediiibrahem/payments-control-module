@@ -1,8 +1,6 @@
-// docs/src/schema.js
 export const SCHEMA_VERSION = 1;
 
 export const HEADER_MAP = {
-  // Arabic -> English keys
   "القطاع": "sector",
   "قطاع": "sector",
   "المشروع": "project",
