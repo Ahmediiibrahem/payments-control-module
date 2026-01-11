@@ -69,8 +69,45 @@ function applyFilters(rows){
   return rows.filter(r => r.vendor);
 }
 
+function computeDataQuality(allRows){
+  let excludedVendor = 0;
+  let missingProject = 0;
+  let badDates = 0;
+
+  allRows.forEach(r => {
+    if (!r.vendor) excludedVendor++;
+    if (!r.project) missingProject++;
+
+    if (
+      (r.source_request_date && !r._srcDate) ||
+      (r.payment_request_date && !r._payReqDate)
+    ) {
+      badDates++;
+    }
+  });
+
+  return {
+    total: allRows.length,
+    excludedVendor,
+    missingProject,
+    badDates
+  };
+}
+
+
 function render(){
+
+  const dq = computeDataQuality(data);
+
+document.getElementById("dq_total").textContent = dq.total;
+document.getElementById("dq_excluded_vendor").textContent = dq.excludedVendor;
+document.getElementById("dq_missing_project").textContent = dq.missingProject;
+document.getElementById("dq_bad_dates").textContent = dq.badDates;
+
+  
   const filtered = applyFilters(data);
+
+  
 
   document.getElementById("kpi_total").textContent =
     fmtMoney(filtered.reduce((a,x)=>a+x.amount_total,0));
