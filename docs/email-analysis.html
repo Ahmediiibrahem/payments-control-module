@@ -1,1 +1,307 @@
 
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تحليل الطلبات المرفوعة على الميل</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg0:#0b1020;
+      --bg1:#0f1630;
+      --card: rgba(255,255,255,0.06);
+      --card2: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.10);
+      --text:#e9ecf6;
+      --muted: rgba(233,236,246,0.70);
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --radius: 18px;
+    }
+
+    *{ box-sizing: border-box; }
+
+    body{
+      font-family: "Cairo", system-ui, -apple-system, Segoe UI, Tahoma, Arial;
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 20% 0%, rgba(124,92,255,0.18), transparent 55%),
+        radial-gradient(700px 450px at 80% 10%, rgba(56,189,248,0.12), transparent 55%),
+        linear-gradient(135deg, var(--bg0), var(--bg1));
+      min-height: 100vh;
+    }
+
+    .container{
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .topbar{
+      display:flex;
+      justify-content: space-between;
+      align-items:center;
+      gap:12px;
+      flex-wrap: wrap;
+      margin: 8px 0 14px;
+    }
+
+    h1{
+      margin: 0;
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .links{
+      display:flex;
+      gap:10px;
+      flex-wrap: wrap;
+    }
+
+    a.btn{
+      text-decoration:none;
+      color: var(--text);
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-weight: 800;
+    }
+    a.btn:hover{ background: rgba(255,255,255,0.10); }
+
+    .card{
+      background: linear-gradient(180deg, var(--card2), var(--card));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .grid{ display:grid; gap: 14px; }
+    .grid.kpi{ grid-template-columns: repeat(4, minmax(220px, 1fr)); }
+    @media (max-width: 900px){ .grid.kpi{ grid-template-columns: 1fr; } }
+
+    .muted{ color: var(--muted); font-size: 13px; }
+    .value{ font-size: 24px; font-weight: 800; margin-top: 6px; }
+    .small{ font-size: 12px; color: var(--muted); }
+
+    /* Filters */
+    .filters{ display:grid; gap: 10px; margin-top: 12px; }
+    .filter-row{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(160px, 1fr));
+      gap: 10px;
+      align-items:center;
+    }
+    @media (max-width: 900px){ .filter-row{ grid-template-columns: 1fr; } }
+
+    label{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      color: var(--muted);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    select, button{
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 14px;
+      font-size: 14px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      outline: none;
+    }
+    select option{ color:#111; }
+    button{ cursor:pointer; font-weight: 800; }
+    button:hover{ background: rgba(255,255,255,0.10); }
+
+    .btn-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-start; }
+    .btn-row button{ width:auto; padding:10px 14px; }
+
+    /* Chart */
+    .chart{
+      display:flex;
+      gap: 8px;
+      align-items:flex-end;
+      height: 160px;
+      padding-top: 6px;
+    }
+    .bar{
+      flex: 1 1 0;
+      background: rgba(255,255,255,0.10);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      position: relative;
+      min-width: 14px;
+    }
+    .bar > span{
+      position:absolute;
+      bottom: -18px;
+      right: 0;
+      left: 0;
+      text-align:center;
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Tables */
+    .table-wrap{
+      overflow:auto;
+      max-height: 60vh;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background:#0b1020;
+      margin-top: 12px;
+    }
+    table{ width:100%; border-collapse:collapse; }
+    th, td{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,0.08);
+      text-align:right;
+      vertical-align: top;
+    }
+    th{
+      position:sticky;
+      top:0;
+      z-index:5;
+      background:#0b1020;
+      font-weight:800;
+      color: rgba(233,236,246,0.95);
+      border-bottom: 1px solid rgba(255,255,255,0.14);
+    }
+    tr:hover td{ background: rgba(255,255,255,0.04); }
+
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="topbar">
+      <h1>تحليل الطلبات المرفوعة على الميل</h1>
+      <div class="links">
+        <a class="btn" href="./index.html">لوحة الكونترول</a>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid kpi">
+      <div class="card">
+        <div class="muted">إجمالي الإيميلات (Unique Time)</div>
+        <div class="value" id="kpi_emails">—</div>
+        <div class="small" id="kpi_emails_hint">—</div>
+      </div>
+
+      <div class="card">
+        <div class="muted">عدد الأيام</div>
+        <div class="value" id="kpi_days">—</div>
+        <div class="small">حسب Month-Day داخل Time</div>
+      </div>
+
+      <div class="card">
+        <div class="muted">متوسط الإيميلات / يوم</div>
+        <div class="value" id="kpi_avg">—</div>
+        <div class="small">بعد تطبيق الفلاتر</div>
+      </div>
+
+      <div class="card">
+        <div class="muted">أعلى مشروع</div>
+        <div class="value" id="kpi_top_project">—</div>
+        <div class="small" id="kpi_top_project_hint">—</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="margin-top:12px;">
+      <div class="filters">
+
+        <div class="filter-row">
+          <label>القطاع:
+            <select id="sector"></select>
+          </label>
+
+          <label>المشروع:
+            <select id="project"></select>
+          </label>
+
+          <label>اليوم (Month-Day):
+            <select id="day_key"></select>
+          </label>
+
+          <div class="btn-row">
+            <button id="clearBtn">مسح</button>
+            <button id="exportBtn">تصدير CSV</button>
+          </div>
+        </div>
+
+        <div class="small">
+          <span id="meta">—</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card" style="margin-top:12px;">
+      <div class="muted" style="font-weight:800;">عدد الإيميلات حسب اليوم (بعد الفلاتر)</div>
+      <div class="chart" id="chart"></div>
+      <div class="small" style="margin-top:8px;">* كل عمود يمثل يوم (Month-Day) — والعدد مبني على Unique Time</div>
+    </div>
+
+    <!-- Summary table -->
+    <div class="card" style="margin-top:12px;">
+      <div class="muted" style="font-weight:800;">ملخص يومي لكل مشروع</div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>اليوم</th>
+              <th>القطاع</th>
+              <th>المشروع</th>
+              <th>عدد الإيميلات</th>
+            </tr>
+          </thead>
+          <tbody id="summary_rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Drilldown -->
+    <div class="card" style="margin-top:12px;">
+      <div class="muted" style="font-weight:800;">تفاصيل الإيميلات (Unique Time) بعد الفلاتر</div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>اليوم</th>
+              <th>القطاع</th>
+              <th>المشروع</th>
+              <th class="mono">Time</th>
+            </tr>
+          </thead>
+          <tbody id="detail_rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script type="module" src="./src/email_analysis.js"></script>
+</body>
+</html>
