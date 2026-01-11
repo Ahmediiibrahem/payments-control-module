@@ -32,13 +32,44 @@ function normalizeHeaderKey(h){
 }
 
 
+function normalizeHeaderKey(h){
+  return String(h ?? "")
+    .replace(/\ufeff/g, "")          // remove BOM
+    .replace(/\r?\n/g, " ")          // remove newlines in header
+    .replace(/\s+/g, " ")            // collapse spaces
+    .trim();
+}
+
+function detectDelimiter(text){
+  const firstLine = (text.split(/\r?\n/).find(l => l.trim().length) || "");
+  const commas = (firstLine.match(/,/g) || []).length;
+  const tabs = (firstLine.match(/\t/g) || []).length;
+  const semis = (firstLine.match(/;/g) || []).length;
+
+  // choose the strongest signal
+  if (tabs > commas && tabs > semis) return "\t";
+  if (semis > commas && semis > tabs) return ";";
+  return ","; // default CSV
+}
+
 function parseCSV(text){
+  const delimiter = detectDelimiter(text);
+
   const res = Papa.parse(text, {
     header: true,
     skipEmptyLines: true,
     dynamicTyping: false,
+    delimiter, // ✅ important
     transformHeader: (h) => normalizeHeaderKey(h)
   });
+
+  if (res.errors && res.errors.length){
+    console.warn("CSV parse errors (first 10):", res.errors.slice(0, 10));
+  }
+
+  return res.data || [];
+}
+
 
   if (res.errors && res.errors.length){
     console.warn("CSV parse errors (first 10):", res.errors.slice(0, 10));
@@ -53,7 +84,7 @@ function normalizeRow(raw){
 
   Object.entries(raw).forEach(([key,value])=>{
     const kNorm = normalizeHeaderKey(key);
-    const mapped = HEADER_MAP[kNorm] || kNorm; // map after normalization
+    const mapped = HEADER_MAP[kNorm] || kNorm;
     row[mapped] = value;
   });
 
@@ -83,6 +114,7 @@ function normalizeRow(raw){
     _payReqDate: parseDateISO(row.payment_request_date)
   };
 }
+
 
 
   const vendor = normalizeVendor(row.vendor);
