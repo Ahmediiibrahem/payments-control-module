@@ -23,14 +23,6 @@ function normalizeVendor(v){
   return t;
 }
 
-function normalizeHeaderKey(h){
-  return String(h ?? "")
-    .replace(/\ufeff/g, "")          // remove BOM
-    .replace(/\r?\n/g, " ")          // remove newlines in header
-    .replace(/\s+/g, " ")            // collapse spaces
-    .trim();
-}
-
 
 function normalizeHeaderKey(h){
   return String(h ?? "")
@@ -53,22 +45,19 @@ function detectDelimiter(text){
 }
 
 function parseCSV(text){
-  const delimiter = detectDelimiter(text);
-
   const res = Papa.parse(text, {
     header: true,
     skipEmptyLines: true,
     dynamicTyping: false,
-    delimiter, // ✅ important
-    transformHeader: (h) => normalizeHeaderKey(h)
+    transformHeader: (h) => normalizeHeaderKey(h) // ✅ critical
   });
 
   if (res.errors && res.errors.length){
     console.warn("CSV parse errors (first 10):", res.errors.slice(0, 10));
   }
-
   return res.data || [];
 }
+
 
 
   if (res.errors && res.errors.length){
@@ -83,10 +72,11 @@ function normalizeRow(raw){
   const row = {};
 
   Object.entries(raw).forEach(([key,value])=>{
-    const kNorm = normalizeHeaderKey(key);
-    const mapped = HEADER_MAP[kNorm] || kNorm;
-    row[mapped] = value;
-  });
+  const kNorm = normalizeHeaderKey(key);
+  const mapped = HEADER_MAP[kNorm] || kNorm;  // لو إنجليزي هيعدي زي ما هو
+  row[mapped] = value;
+});
+
 
   const vendor = normalizeVendor(row.vendor);
 
