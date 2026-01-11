@@ -50,7 +50,6 @@
     }
 
     .muted{ color: var(--muted); font-size: 13px; }
-
     .grid{ display:grid; gap: 14px; }
 
     .grid.kpi{ grid-template-columns: repeat(4, minmax(220px, 1fr)); }
@@ -73,11 +72,8 @@
 
     .small{ font-size: 12px; color: var(--muted); }
 
-    /* Filters layout */
-    .filters{
-      display: grid;
-      gap: 12px;
-    }
+    /* Filters */
+    .filters{ display: grid; gap: 12px; }
 
     .filter-row{
       display: grid;
@@ -110,20 +106,14 @@
       outline: none;
     }
 
-    select option{
-      color: #111;
-    }
-
-    input::placeholder{ color: rgba(233,236,246,0.55); }
+    select option{ color: #111; }
 
     button{
       cursor: pointer;
       font-weight: 800;
     }
 
-    button:hover{
-      background: rgba(255,255,255,0.10);
-    }
+    button:hover{ background: rgba(255,255,255,0.10); }
 
     .btn-row{
       display:flex;
@@ -158,6 +148,7 @@
       max-height: 70vh;
       border: 1px solid var(--border);
       border-radius: var(--radius);
+      background: #0b1020; /* ✅ solid behind table */
     }
 
     table{
@@ -174,12 +165,13 @@
     }
 
     th{
-      background: rgba(255,255,255,0.06);
+      background: #0b1020;   /* ✅ solid header */
       position: sticky;
       top: 0;
-      z-index: 1;
+      z-index: 5;
       font-weight: 800;
-      color: rgba(233,236,246,0.92);
+      color: rgba(233,236,246,0.95);
+      border-bottom: 1px solid rgba(255,255,255,0.14);
     }
 
     tr:hover td{
@@ -195,7 +187,7 @@
 <body>
   <div class="container">
 
-    <h1>مطالبات المشاريع – Cash Control Dashboard</h1>
+    <h1>Cash Control Dashboard – مطالبات المشاريع</h1>
 
     <!-- KPIs -->
     <div class="grid kpi">
@@ -224,7 +216,7 @@
       </div>
     </div>
 
-    <!-- Data Quality (single line, no title) -->
+    <!-- Data Quality -->
     <div class="card" style="margin-top:12px;">
       <div class="dq-row">
         <div>إجمالي الصفوف: <b id="dq_total">—</b></div>
@@ -234,7 +226,7 @@
       </div>
     </div>
 
-    <!-- Filters (3 rows) -->
+    <!-- Filters -->
     <div class="card" style="margin-top:12px;">
       <div class="filters">
 
@@ -248,8 +240,7 @@
             <select id="project"></select>
           </label>
 
-          <div></div>
-          <div></div>
+          <div></div><div></div>
         </div>
 
         <!-- Row 2 -->
@@ -262,8 +253,7 @@
             <select id="status"></select>
           </label>
 
-          <div></div>
-          <div></div>
+          <div></div><div></div>
         </div>
 
         <!-- Row 3 -->
@@ -324,10 +314,7 @@
 
   </div>
 
-  <!-- CSV parser -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-  <!-- App (ES Module) -->
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>
