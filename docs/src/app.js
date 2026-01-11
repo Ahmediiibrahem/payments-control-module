@@ -113,8 +113,9 @@ function normalizeRow(raw) {
     approval_date: String(row.approval_date ?? "").trim(),
     payment_date: String(row.payment_date ?? "").trim(),
 
-    _srcDate: parseDateISO(row.source_request_date),
-    _payReqDate: parseDateISO(row.payment_request_date),
+    _srcDate: parseDateSmart(row.source_request_date),
+    _payReqDate: parseDateSmart(row.payment_request_date),
+
   };
 }
 
@@ -204,6 +205,31 @@ function render() {
   `).join("");
 }
 
+  let projectsBySector = new Map();
+let allProjects = [];
+
+function uniqSorted(values){
+  return Array.from(new Set(values.filter(v => String(v).trim()))).sort((a,b)=> String(a).localeCompare(String(b)));
+}
+
+function setSelectOptions(id, values, keepValue=false){
+  const sel = document.getElementById(id);
+  const current = sel.value;
+  const opts = uniqSorted(values);
+
+  sel.innerHTML = `<option value="">الكل</option>` + opts.map(v => `<option value="${String(v)}">${String(v)}</option>`).join("");
+
+  if (keepValue && current && opts.includes(current)) sel.value = current;
+  else sel.value = "";
+}
+
+function rebuildProjectDropdownForSector(){
+  const sector = document.getElementById("sector").value.trim();
+  const projects = sector ? Array.from(projectsBySector.get(sector) || []) : allProjects;
+  setSelectOptions("project", projects, true);
+}
+
+
 // ============================
 // Init
 // ============================
@@ -215,6 +241,49 @@ async function init() {
   }
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
+
+  // build sector -> projects map
+projectsBySector = new Map();
+data.forEach(r => {
+  const sec = (r.sector || "(بدون قطاع)").trim();
+  const proj = (r.project || "").trim();
+  if (!proj) return;
+  if (!projectsBySector.has(sec)) projectsBySector.set(sec, new Set());
+  projectsBySector.get(sec).add(proj);
+});
+
+allProjects = uniqSorted(data.map(r => r.project));
+
+// dropdowns
+setSelectOptions("sector", data.map(r => r.sector));
+setSelectOptions("account_item", data.map(r => r.account_item)); // global
+setSelectOptions("status", data.map(r => r.status));             // global
+setSelectOptions("project", allProjects);
+
+// events
+document.getElementById("sector").addEventListener("change", () => {
+  rebuildProjectDropdownForSector();
+  render();
+});
+
+["project","account_item","status","date_type","date_from","date_to"].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener("change", render);
+  el.addEventListener("input", render);
+});
+
+document.getElementById("clearBtn").addEventListener("click", () => {
+  document.getElementById("sector").value = "";
+  rebuildProjectDropdownForSector();
+  document.getElementById("account_item").value = "";
+  document.getElementById("status").value = "";
+  document.getElementById("date_type").value = "source_request_date";
+  document.getElementById("date_from").value = "";
+  document.getElementById("date_to").value = "";
+  render();
+});
+
+  
   render();
 }
 
