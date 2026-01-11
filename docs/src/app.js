@@ -16,17 +16,34 @@ function fmtMoney(n) {
   return (n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-function parseDateISO(s) {
+function parseDateSmart(s) {
   const t = String(s ?? "").trim();
-  if (!t) return null;
+  if (!t || t === "-" || t === "0") return null;
 
-  // Expect YYYY-MM-DD (we’ll enhance later to accept M/D/YYYY if needed)
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
-  if (!m) return null;
+  // YYYY-MM-DD
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  if (m) {
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    return isNaN(d.getTime()) ? null : d;
+  }
 
-  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-  return isNaN(d.getTime()) ? null : d;
+  // M/D/YYYY or D/M/YYYY
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if (m) {
+    const a = +m[1], b = +m[2], y = +m[3];
+
+    // نحاول نفهمها بذكاء:
+    // لو أول رقم > 12 يبقى غالباً D/M/YYYY
+    let mm = a, dd = b;
+    if (a > 12) { dd = a; mm = b; }
+
+    const d = new Date(Date.UTC(y, mm - 1, dd));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
 }
+
 
 function normalizeVendor(v) {
   const t = String(v ?? "")
