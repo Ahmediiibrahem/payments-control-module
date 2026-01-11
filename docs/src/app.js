@@ -1,3 +1,5 @@
+import { COLUMNS, HEADER_MAP } from "./schema.js";
+
 let data = [];
 
 function toNumber(x){
@@ -26,28 +28,42 @@ function parseCSV(text){
   return res.data || [];
 }
 
-function normalizeRow(r){
-  const vendor = normalizeVendor(r.vendor || r["المورد"]);
+function normalizeRow(raw){
+  const row = {};
+
+  // توحيد أسماء الأعمدة
+  Object.entries(raw).forEach(([key,value])=>{
+    const k = HEADER_MAP[key] || key;
+    row[k] = value;
+  });
+
+  const vendor = normalizeVendor(row.vendor);
+
   return {
-    sector: r.sector || r["القطاع"] || "",
-    project: r.project || r["المشروع"] || "",
-    account_item: r.account_item || r["بند الحسابات"] || "",
-    status: r.status || r["الحالة"] || "",
-    request_id: r.request_id || r["رقم الطلب"] || "",
-    code: r.code || r["الكود"] || "",
+    sector: String(row.sector || "").trim(),
+    project: String(row.project || "").trim(),
+    account_item: String(row.account_item || "").trim(),
+    status: String(row.status || "").trim(),
+
+    request_id: String(row.request_id || "").trim(),
+    code: String(row.code || "").trim(),
     vendor,
-    amount_total: toNumber(r.amount_total || r["المبلغ"]),
-    amount_paid: toNumber(r.amount_paid || r["المنصرف"]),
-    amount_canceled: toNumber(r.amount_canceled || r["الملغي"]),
-    amount_remaining: toNumber(r.amount_remaining || r["المتبقي"]),
-    source_request_date: r.source_request_date || "",
-    payment_request_date: r.payment_request_date || "",
-    approval_date: r.approval_date || "",
-    payment_date: r.payment_date || "",
-    _srcDate: parseDateISO(r.source_request_date),
-    _payReqDate: parseDateISO(r.payment_request_date)
+
+    amount_total: toNumber(row.amount_total),
+    amount_paid: toNumber(row.amount_paid),
+    amount_canceled: toNumber(row.amount_canceled),
+    amount_remaining: toNumber(row.amount_remaining),
+
+    source_request_date: String(row.source_request_date || "").trim(),
+    payment_request_date: String(row.payment_request_date || "").trim(),
+    approval_date: String(row.approval_date || "").trim(),
+    payment_date: String(row.payment_date || "").trim(),
+
+    _srcDate: parseDateISO(row.source_request_date),
+    _payReqDate: parseDateISO(row.payment_request_date)
   };
 }
+
 
 function applyFilters(rows){
   return rows.filter(r => r.vendor);
