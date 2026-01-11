@@ -23,19 +23,67 @@ function normalizeVendor(v){
   return t;
 }
 
+function normalizeHeaderKey(h){
+  return String(h ?? "")
+    .replace(/\ufeff/g, "")          // remove BOM
+    .replace(/\r?\n/g, " ")          // remove newlines in header
+    .replace(/\s+/g, " ")            // collapse spaces
+    .trim();
+}
+
+
 function parseCSV(text){
-  const res = Papa.parse(text,{header:true,skipEmptyLines:true});
+  const res = Papa.parse(text, {
+    header: true,
+    skipEmptyLines: true,
+    dynamicTyping: false,
+    transformHeader: (h) => normalizeHeaderKey(h)
+  });
+
+  if (res.errors && res.errors.length){
+    console.warn("CSV parse errors (first 10):", res.errors.slice(0, 10));
+  }
+
   return res.data || [];
 }
+
 
 function normalizeRow(raw){
   const row = {};
 
-  // توحيد أسماء الأعمدة
   Object.entries(raw).forEach(([key,value])=>{
-    const k = HEADER_MAP[key] || key;
-    row[k] = value;
+    const kNorm = normalizeHeaderKey(key);
+    const mapped = HEADER_MAP[kNorm] || kNorm; // map after normalization
+    row[mapped] = value;
   });
+
+  const vendor = normalizeVendor(row.vendor);
+
+  return {
+    sector: String(row.sector || "").trim(),
+    project: String(row.project || "").trim(),
+    account_item: String(row.account_item || "").trim(),
+    status: String(row.status || "").trim(),
+
+    request_id: String(row.request_id || "").trim(),
+    code: String(row.code || "").trim(),
+    vendor,
+
+    amount_total: toNumber(row.amount_total),
+    amount_paid: toNumber(row.amount_paid),
+    amount_canceled: toNumber(row.amount_canceled),
+    amount_remaining: toNumber(row.amount_remaining),
+
+    source_request_date: String(row.source_request_date || "").trim(),
+    payment_request_date: String(row.payment_request_date || "").trim(),
+    approval_date: String(row.approval_date || "").trim(),
+    payment_date: String(row.payment_date || "").trim(),
+
+    _srcDate: parseDateISO(row.source_request_date),
+    _payReqDate: parseDateISO(row.payment_request_date)
+  };
+}
+
 
   const vendor = normalizeVendor(row.vendor);
 
