@@ -4,93 +4,182 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cash Control Dashboard – مطالبات المشاريع</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 
-  <style>
-    :root{
-      --bg:#ffffff;
-      --muted:#666;
-      --border:#eee;
-      --shadow:0 2px 14px rgba(0,0,0,.06);
-      --card:#fff;
-    }
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Tahoma, Arial;
-      margin: 22px;
-      background:var(--bg);
-      color:#111;
-    }
-    h1 { margin: 0 0 10px; font-size: 22px; }
-    .muted { color:var(--muted); font-size:13px; }
 
-    .grid { display:grid; gap:12px; }
-    .grid.kpi { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
-    @media (max-width: 900px){ .grid.kpi { grid-template-columns: 1fr; } }
+<style>
+  :root{
+    --bg0:#0b1020;
+    --bg1:#0f1630;
+    --card: rgba(255,255,255,0.06);
+    --card2: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.10);
+    --text:#e9ecf6;
+    --muted: rgba(233,236,246,0.70);
+    --shadow: 0 10px 30px rgba(0,0,0,0.35);
+    --radius: 18px;
+  }
 
-    .card {
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:16px;
-      padding:14px;
-      box-shadow: var(--shadow);
-    }
+  *{ box-sizing: border-box; }
 
-    .kpi .value { font-size: 22px; font-weight: 700; margin-top: 6px; }
-    .small { font-size:12px; color:var(--muted); }
+  body{
+    font-family: "Cairo", system-ui, -apple-system, Segoe UI, Tahoma, Arial;
+    margin: 0;
+    color: var(--text);
+    background:
+      radial-gradient(900px 500px at 20% 0%, rgba(124,92,255,0.18), transparent 55%),
+      radial-gradient(700px 450px at 80% 10%, rgba(56,189,248,0.12), transparent 55%),
+      linear-gradient(135deg, var(--bg0), var(--bg1));
+    min-height: 100vh;
+  }
 
-    .row {
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
+  .container{
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 22px;
+  }
 
-    input, select, button {
-      padding:10px 12px;
-      border:1px solid #ccc;
-      border-radius:12px;
-      font-size:14px;
-      background:#fff;
-    }
+  h1{
+    margin: 10px 0 18px;
+    font-size: 26px;
+    font-weight: 800;
+    text-align: center; /* ✅ في نص الصفحة */
+    letter-spacing: .2px;
+  }
 
-    label { display:flex; gap:8px; align-items:center; }
-    button { cursor:pointer; }
-    button:hover { background:#fafafa; }
+  .muted{ color: var(--muted); font-size: 13px; }
 
-    table {
-      width:100%;
-      border-collapse:collapse;
-      margin-top:10px;
-    }
+  .grid{ display:grid; gap: 14px; }
 
-    th, td {
-      padding:10px;
-      border-bottom:1px solid var(--border);
-      text-align:right;
-      vertical-align:top;
-    }
+  .grid.kpi{ grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+  @media (max-width: 900px){ .grid.kpi{ grid-template-columns: 1fr; } }
 
-    th {
-      background:#fafafa;
-      position:sticky;
-      top:0;
-      z-index:1;
-    }
+  .card{
+    background: linear-gradient(180deg, var(--card2), var(--card));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+  }
 
-    .table-wrap {
-      overflow:auto;
-      max-height: 70vh;
-      border:1px solid var(--border);
-      border-radius:14px;
-    }
+  .kpi .value{
+    font-size: 24px;
+    font-weight: 800; /* ✅ Bold */
+    margin-top: 6px;
+  }
 
-    .mono {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    }
-  </style>
+  .small{ font-size: 12px; color: var(--muted); }
+
+  /* Filters layout */
+  .filters{
+    display: grid;
+    gap: 12px;
+  }
+
+  .filter-row{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: 10px;
+    align-items: center;
+  }
+
+  @media (max-width: 900px){
+    .filter-row{ grid-template-columns: 1fr; }
+  }
+
+  label{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    white-space: nowrap;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  input, select, button{
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 14px;
+    font-size: 14px;
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    outline: none;
+  }
+
+  select option{
+    color: #111; /* dropdown list text */
+  }
+
+  input::placeholder{ color: rgba(233,236,246,0.55); }
+
+  button{
+    cursor: pointer;
+    font-weight: 800;
+  }
+
+  button:hover{
+    background: rgba(255,255,255,0.10);
+  }
+
+  .btn-row{
+    display:flex;
+    gap:10px;
+    flex-wrap: wrap;
+  }
+
+  .btn-row button{
+    width: auto;
+    padding: 10px 14px;
+  }
+
+  /* Table */
+  .table-wrap{
+    overflow:auto;
+    max-height: 70vh;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  table{
+    width:100%;
+    border-collapse: collapse;
+    margin-top: 0;
+  }
+
+  th, td{
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    text-align: right;
+    vertical-align: top;
+  }
+
+  th{
+    background: rgba(255,255,255,0.06);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-weight: 800; /* ✅ Bold headers */
+    color: rgba(233,236,246,0.92);
+  }
+
+  tr:hover td{
+    background: rgba(255,255,255,0.04);
+  }
+
+  .mono{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+</style>
+
 </head>
 <body>
+  <div class="container">
 
-<h1>Cash Control Dashboard – مطالبات المشاريع</h1>
+    <h1>Cash Control Dashboard – مطالبات المشاريع</h1>
 
 <!-- KPIs -->
 <div class="grid kpi">
@@ -127,30 +216,65 @@
 
 <!-- Filters -->
 <div class="card" style="margin-top:12px;">
-  <div class="row">
-    <label>القطاع: <select id="sector"></select></label>
-    <label>المشروع: <select id="project"></select></label>
-    <label>بند الحسابات: <select id="account_item"></select></label>
-    <label>الحالة: <select id="status"></select></label>
+  <div class="filters">
 
-    <label>نوع التاريخ:
-      <select id="date_type">
-        <option value="source_request_date">تاريخ الطلب (من المشروع)</option>
-        <option value="payment_request_date">تاريخ طلب الصرف</option>
-      </select>
-    </label>
+    <!-- Row 1: sector + project -->
+    <div class="filter-row">
+      <label>القطاع:
+        <select id="sector"></select>
+      </label>
 
-    <label>من: <input id="date_from" type="date"></label>
-    <label>إلى: <input id="date_to" type="date"></label>
+      <label>المشروع:
+        <select id="project"></select>
+      </label>
 
-    <button id="clearBtn">مسح</button>
-    <button id="exportBtn">تصدير CSV</button>
-  </div>
+      <div></div>
+      <div></div>
+    </div>
 
-  <div class="small" style="margin-top:10px;">
-    المعروض الآن: <span id="meta">—</span>
+    <!-- Row 2: account item + status -->
+    <div class="filter-row">
+      <label>بند الحسابات:
+        <select id="account_item"></select>
+      </label>
+
+      <label>الحالة:
+        <select id="status"></select>
+      </label>
+
+      <div></div>
+      <div></div>
+    </div>
+
+    <!-- Row 3: date filters -->
+    <div class="filter-row">
+      <label>نوع التاريخ:
+        <select id="date_type">
+          <option value="source_request_date">تاريخ الطلب (من المشروع)</option>
+          <option value="payment_request_date">تاريخ طلب الصرف</option>
+        </select>
+      </label>
+
+      <label>من:
+        <input id="date_from" type="date" />
+      </label>
+
+      <label>إلى:
+        <input id="date_to" type="date" />
+      </label>
+
+      <div class="btn-row">
+        <button id="clearBtn" title="مسح الفلاتر">مسح</button>
+        <button id="exportBtn" title="تصدير النتائج الحالية CSV">تصدير CSV</button>
+      </div>
+    </div>
+
+    <div class="small" style="margin-top:2px;">
+      <span id="meta">—</span>
+    </div>
   </div>
 </div>
+
 
 <!-- Table -->
 <div class="card" style="margin-top:12px;">
