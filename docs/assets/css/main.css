@@ -29,32 +29,39 @@ body{
   padding: 22px;
 }
 
-/* ===== Topbar ===== */
+/* ===== Topbar (Unified) ===== */
 .topbar{
-  display:flex;
-  justify-content: space-between;
-  align-items:center;
-  gap:12px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr; /* left buttons | centered title | spacer */
+  align-items: center;
+  gap: 12px;
   margin: 8px 0 14px;
   position: relative;
   z-index: 9999;
   pointer-events: auto;
 }
 
-h1{
+.page-title{
   margin: 0;
-  font-size: 24px;
+  font-size: 26px;     /* ✅ نفس الحجم للصفحتين */
   font-weight: 800;
+  text-align: center;  /* ✅ في النص */
+  justify-self: center;
+  line-height: 1.2;
 }
 
-.links{
-  display:flex;
-  gap:10px;
+.nav-left{
+  justify-self: end;   /* ✅ في RTL end = left */
+  display: flex;
+  gap: 10px;
   flex-wrap: wrap;
   position: relative;
   z-index: 10000;
   pointer-events: auto;
+}
+
+.nav-spacer{
+  justify-self: start; /* RTL start = right */
 }
 
 a.btn{
@@ -62,14 +69,55 @@ a.btn{
   color: var(--text);
   border:1px solid rgba(255,255,255,0.14);
   background: rgba(255,255,255,0.06);
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: 14px;
   font-weight: 800;
+  font-size: 14px;     /* ✅ نفس الخط */
+  line-height: 1;
   position: relative;
   z-index: 10001;
   pointer-events: auto;
+  white-space: nowrap;
 }
 a.btn:hover{ background: rgba(255,255,255,0.10); }
+
+
+/* ===== KPI Cards (Unified) ===== */
+.grid.kpi{
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+}
+@media (max-width: 900px){
+  .grid.kpi{ grid-template-columns: 1fr; }
+}
+
+.kpi-card{
+  min-height: 120px;                 /* ✅ نفس الارتفاع */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;                /* ✅ كل شيء في النص */
+  padding: 16px;
+}
+
+.kpi-label{
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.kpi-value{
+  margin-top: 8px;
+  font-size: 26px;                   /* ✅ نفس حجم الرقم */
+  font-weight: 800;
+}
+
+.kpi-sub{
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 
 /* ===== Cards ===== */
 .card{
