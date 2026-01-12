@@ -41,15 +41,22 @@ body{
   pointer-events: auto;
 }
 
+/* ===== Navigation Buttons (Unified & Equal Width) ===== */
 .nav-left{
-  justify-self: end;      /* RTL end = left */
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
+  justify-self: end;        /* في RTL = الشمال */
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;       /* 👈 يمنع كسر السطر */
   position: relative;
   z-index: 10000;
-  pointer-events: auto;
 }
+
+/* نفس العرض للزرين */
+.nav-left .btn{
+  min-width: 190px;        /* 👈 عرض موحد */
+  text-align: center;
+}
+
 
 .nav-spacer{
   justify-self: start;    /* RTL start = right */
