@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تحليل الطلبات المرفوعة على الميل</title>
+  <title>Cash Control Dashboard – مطالبات المشاريع</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,6 +41,7 @@
       padding: 22px;
     }
 
+    /* Topbar */
     .topbar{
       display:flex;
       justify-content: space-between;
@@ -48,6 +49,8 @@
       gap:12px;
       flex-wrap: wrap;
       margin: 8px 0 14px;
+      position: relative;
+      z-index: 9999;
     }
 
     h1{
@@ -73,6 +76,7 @@
     }
     a.btn:hover{ background: rgba(255,255,255,0.10); }
 
+    /* Cards */
     .card{
       background: linear-gradient(180deg, var(--card2), var(--card));
       border: 1px solid var(--border);
@@ -80,6 +84,8 @@
       padding: 14px;
       box-shadow: var(--shadow);
       backdrop-filter: blur(10px);
+      position: relative;
+      z-index: 1;
     }
 
     .grid{ display:grid; gap: 14px; }
@@ -94,7 +100,7 @@
     .filters{ display:grid; gap: 10px; margin-top: 12px; }
     .filter-row{
       display:grid;
-      grid-template-columns: repeat(4, minmax(160px, 1fr));
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
       gap: 10px;
       align-items:center;
     }
@@ -108,7 +114,7 @@
       font-weight: 800;
       white-space: nowrap;
     }
-    select, button{
+    select, input, button{
       width: 100%;
       padding: 11px 12px;
       border: 1px solid rgba(255,255,255,0.14);
@@ -125,39 +131,10 @@
     .btn-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-start; }
     .btn-row button{ width:auto; padding:10px 14px; }
 
-    /* Chart */
-    .chart{
-      display:flex;
-      gap: 8px;
-      align-items:flex-end;
-      height: 160px;
-      padding-top: 6px;
-    }
-    .bar{
-      flex: 1 1 0;
-      background: rgba(255,255,255,0.10);
-      border:1px solid rgba(255,255,255,0.12);
-      border-radius: 10px;
-      position: relative;
-      min-width: 14px;
-    }
-    .bar > span{
-      position:absolute;
-      bottom: -18px;
-      right: 0;
-      left: 0;
-      text-align:center;
-      font-size: 11px;
-      color: var(--muted);
-      white-space: nowrap;
-      overflow:hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* Tables */
+    /* Table */
     .table-wrap{
       overflow:auto;
-      max-height: 60vh;
+      max-height: 65vh;
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background:#0b1020;
@@ -180,53 +157,45 @@
       border-bottom: 1px solid rgba(255,255,255,0.14);
     }
     tr:hover td{ background: rgba(255,255,255,0.04); }
-
-    .mono{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    }
   </style>
 </head>
 
 <body>
   <div class="container">
+
     <div class="topbar">
-      <h1>تحليل الطلبات المرفوعة على الميل</h1>
+      <h1>Cash Control Dashboard – مطالبات المشاريع</h1>
       <div class="links">
-        <a class="btn" href="./index.html">لوحة الكونترول</a>
+        <a class="btn" href="./email-analysis.html">تحليل الطلبات المرفوعة على الميل</a>
       </div>
     </div>
 
     <!-- KPIs -->
     <div class="grid kpi">
       <div class="card">
-        <div class="muted">إجمالي الإيميلات (Unique Time)</div>
-        <div class="value" id="kpi_emails">—</div>
-        <div class="small">بعد تطبيق الفلاتر</div>
+        <div class="muted">إجمالي المطالبات</div>
+        <div class="value" id="kpi_total">—</div>
       </div>
 
       <div class="card">
-        <div class="muted">عدد الأيام</div>
-        <div class="value" id="kpi_days">—</div>
-        <div class="small">مبني على payment_request_date</div>
+        <div class="muted">إجمالي المنصرف</div>
+        <div class="value" id="kpi_paid">—</div>
       </div>
 
       <div class="card">
-        <div class="muted">متوسط الإيميلات / يوم</div>
-        <div class="value" id="kpi_avg">—</div>
-        <div class="small">بعد تطبيق الفلاتر</div>
+        <div class="muted">إجمالي المتبقي</div>
+        <div class="value" id="kpi_remaining">—</div>
       </div>
 
       <div class="card">
-        <div class="muted">أعلى مشروع</div>
-        <div class="value" id="kpi_top_project">—</div>
-        <div class="small" id="kpi_top_project_hint">—</div>
+        <div class="muted">إجمالي الملغي</div>
+        <div class="value" id="kpi_canceled">—</div>
       </div>
     </div>
 
     <!-- Filters -->
     <div class="card" style="margin-top:12px;">
       <div class="filters">
-
         <div class="filter-row">
           <label>القطاع:
             <select id="sector"></select>
@@ -236,64 +205,66 @@
             <select id="project"></select>
           </label>
 
-          <label>اليوم (payment_request_date):
-            <select id="day_key"></select>
+          <label>بند الحسابات:
+            <select id="account_item"></select>
+          </label>
+
+          <label>الحالة:
+            <select id="status">
+              <option value="">الكل</option>
+              <option value="Paid">منصرف</option>
+              <option value="Pending">متبقي</option>
+            </select>
+          </label>
+
+          <label>التاريخ:
+            <select id="date_type">
+              <option value="payment_request_date">(C) تاريخ طلب الصرف</option>
+              <option value="source_request_date">(S) تاريخ الطلب من المشروع</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-row">
+          <label>من:
+            <input type="date" id="date_from">
+          </label>
+
+          <label>إلى:
+            <input type="date" id="date_to">
           </label>
 
           <div class="btn-row">
             <button id="clearBtn">مسح</button>
-            <button id="exportBtn">تصدير CSV</button>
           </div>
         </div>
-
-        <div class="small">
-          <span id="meta">—</span>
-        </div>
-
       </div>
     </div>
 
-    <!-- Chart -->
+    <!-- Table -->
     <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">عدد الإيميلات حسب اليوم (بعد الفلاتر)</div>
-      <div class="chart" id="chart"></div>
-      <div class="small" style="margin-top:8px;">* كل عمود يمثل يوم (payment_request_date) — والعدد مبني على Unique Time</div>
-    </div>
-
-    <!-- Summary table -->
-    <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">ملخص يومي لكل مشروع</div>
+      <div class="muted" style="font-weight:800;">تفاصيل المطالبات</div>
 
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>اليوم</th>
-              <th>القطاع</th>
+              <th>رقم الطلب</th>
+              <th>الكود</th>
+              <th>المورد</th>
+              <th>إجمالي المبلغ</th>
+              <th>المنصرف</th>
+              <th>الملغي</th>
+              <th>المتبقي</th>
+              <th>بند الحسابات</th>
               <th>المشروع</th>
-              <th>عدد الإيميلات</th>
+              <th>تاريخ الطلب من المشروع</th>
+              <th>تاريخ طلب الصرف</th>
+              <th>تاريخ التعميد</th>
+              <th>تاريخ الصرف</th>
             </tr>
           </thead>
-          <tbody id="summary_rows"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Drilldown -->
-    <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">تفاصيل الإيميلات (Unique Time) بعد الفلاتر</div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>اليوم</th>
-              <th>القطاع</th>
-              <th>المشروع</th>
-              <th class="mono">Time</th>
-            </tr>
-          </thead>
-          <tbody id="detail_rows"></tbody>
+          <tbody id="rows"></tbody>
         </table>
       </div>
     </div>
@@ -301,6 +272,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script type="module" src="./src/email_analysis.js"></script>
+  <script type="module" src="./src/app.js"></script>
 </body>
 </html>
