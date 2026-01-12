@@ -296,3 +296,54 @@ tbody tr:hover{
 }
 
 .modal-body{padding:14px}
+
+/* ===== HARD FIX: NAV LINKS ALWAYS LOOK LIKE BUTTONS ===== */
+.topbar{
+  margin-bottom:16px;
+}
+
+/* خلي أي لينكات داخل الـ topbar شكلها button */
+.topbar a{
+  text-decoration:none !important;
+  color:rgba(233,236,246,.95) !important;
+}
+
+/* لو عندك wrapper للأزرار (حتى لو اسمه nav-top أو أي حاجة) */
+.topbar > div:first-child{
+  display:flex !important;
+  justify-content:center !important;
+  align-items:center !important;
+  gap:12px !important;
+  flex-wrap:nowrap !important;     /* سطر واحد */
+  white-space:nowrap !important;
+  margin-bottom:14px !important;
+}
+
+/* الزرارين نفس المقاس */
+.topbar > div:first-child a{
+  display:inline-flex !important;
+  justify-content:center !important;
+  align-items:center !important;
+
+  width:230px !important;
+  height:42px !important;
+
+  padding:0 14px !important;
+  border-radius:14px !important;
+  border:1px solid rgba(255,255,255,.12) !important;
+  background:rgba(255,255,255,.06) !important;
+
+  font-weight:800 !important;
+  line-height:1 !important;
+}
+
+/* hover */
+.topbar > div:first-child a:hover{
+  background:rgba(255,255,255,.12) !important;
+}
+
+/* العنوان ينزل عنهم */
+.topbar .page-title{
+  margin-top:6px !important;
+  text-align:center !important;
+}
