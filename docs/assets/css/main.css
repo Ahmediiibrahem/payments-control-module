@@ -58,6 +58,7 @@ body{
 
 .page-title{
   margin: 0;
+  margin-top: 10px; 
   font-size: 26px;
   font-weight: 800;
   text-align:center;
@@ -247,6 +248,59 @@ button:hover{ background: rgba(255,255,255,0.10); }
   font-weight: 800;
 }
 .chart-footer b{ color: var(--text); }
+
+/* ===== Emails Chart (2 bars per day + values on bars) ===== */
+.chart{
+  height: 210px;              /* أعلى شوية عشان الرقم يبان فوق العمود */
+  align-items: flex-end;
+}
+
+.chart-group{
+  flex: 1 1 0;
+  min-width: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.chart-bars{
+  height: 170px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.bar{
+  flex: 1 1 0;
+  min-width: 10px;
+}
+
+.bar .bar-value{
+  position: absolute;
+  top: -18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(233,236,246,0.95);
+  pointer-events: none;
+}
+
+.chart-day{
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar.total{ background: rgba(255,255,255,0.12); }
+.bar.paid{  background: rgba(255,255,255,0.22); }
+
 
 /* ===== Tables ===== */
 .table-wrap{
