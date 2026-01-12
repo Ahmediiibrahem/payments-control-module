@@ -6,7 +6,6 @@ let projectsBySector = new Map();  // sectorKey -> Set(projectKey)
 let sectorLabelByKey = new Map();  // sectorKey -> label
 let projectLabelByKey = new Map(); // projectKey -> label
 
-// For day input (label -> ISO)
 let dayLabelToISO = new Map();
 
 // ============================
@@ -53,14 +52,6 @@ function parseDateSmart(s) {
   }
 
   return null;
-}
-
-function normalizeVendor(v) {
-  const t = normText(v);
-  if (!t) return "";
-  const lower = t.toLowerCase();
-  if (t === "-" || t === "0" || lower === "null" || lower === "none") return "";
-  return t;
 }
 
 function normalizeHeaderKey(h) {
@@ -121,16 +112,22 @@ function parseCSV(text) {
 // ============================
 function normalizeRow(raw) {
   const row = {};
+  let timeFromRaw = "";
 
   Object.entries(raw).forEach(([key, value]) => {
     const kNorm = normalizeHeaderKey(key);
-    const mapped = HEADER_MAP[kNorm] || kNorm; // English passes through
+    const mapped = HEADER_MAP[kNorm] || kNorm;
     row[mapped] = value;
+
+    // ✅ التقط عمود Time حتى لو اسمه مختلف/عربي
+    const kLower = kNorm.toLowerCase();
+    if (kLower === "time" || kLower === "mail_time" || kLower === "email_time" || kNorm === "التايم" || kNorm === "الوقت") {
+      timeFromRaw = value;
+    }
   });
 
   const sectorLabel = normText(row.sector) || "(بدون قطاع)";
   const projectLabel = normText(row.project);
-  const status = normText(row.status);
 
   const sectorKey = normText(sectorLabel);
   const projectKey = normText(projectLabel);
@@ -138,15 +135,16 @@ function normalizeRow(raw) {
   if (sectorKey) sectorLabelByKey.set(sectorKey, sectorLabel);
   if (projectKey) projectLabelByKey.set(projectKey, projectLabel);
 
+  // ✅ time: جرّب من الماب + من raw + من احتمالات مختلفة
+  const timeValue = normText(
+    row.Time ?? row.time ?? row.TIME ?? timeFromRaw ?? ""
+  );
+
   return {
     sectorKey,
     projectKey,
-
     sector: sectorLabel,
     project: projectLabel,
-    status,
-
-    vendor: normalizeVendor(row.vendor),
 
     amount_total: toNumber(row.amount_total),
     amount_paid: toNumber(row.amount_paid),
@@ -154,12 +152,12 @@ function normalizeRow(raw) {
     payment_request_date: normText(row.payment_request_date),
     _payReqDate: parseDateSmart(row.payment_request_date),
 
-    Time: normText(row.Time ?? row.time ?? row.TIME ?? ""), // ✅ العمود الجديد
+    Time: timeValue,
   };
 }
 
 // ============================
-// Day formatting + mapping
+// Day mapping
 // ============================
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -172,7 +170,6 @@ function dayLabelFromISO(iso) {
 }
 
 function buildDayListOptions(emailRows) {
-  // Unique days based on payment_request_date
   const dayISOs = uniqSorted(
     emailRows
       .map(r => (r.payment_request_date || "").trim())
@@ -188,7 +185,7 @@ function buildDayListOptions(emailRows) {
     dayLabelToISO.set(label, iso);
 
     const opt = document.createElement("option");
-    opt.value = label; // ✅ searchable like "31-"
+    opt.value = label; // searchable like "31-"
     dl.appendChild(opt);
   });
 }
@@ -196,15 +193,14 @@ function buildDayListOptions(emailRows) {
 function getSelectedDayISO() {
   const val = normText(document.getElementById("day_key")?.value);
   if (!val) return "";
-  // If user types exact label (e.g., 31-May)
   if (dayLabelToISO.has(val)) return dayLabelToISO.get(val);
-  // If user types ISO directly
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-  return ""; // unmatched
+  return "";
 }
 
 // ============================
 // Filters (Emails page)
+// ✅ هنا التعديل الأساسي: لا نربطها بـ vendor
 // ============================
 function applyFiltersEmails(rows) {
   const sectorKey = document.getElementById("sector").value;
@@ -215,16 +211,12 @@ function applyFiltersEmails(rows) {
   const selectedDayISO = getSelectedDayISO();
 
   return rows.filter(r => {
-    // Official row rule (زي app.js)
-    if (!r.vendor) return false;
-
-    // This page is about E-Mails => must have Time
+    // Emails page rule: must have Time
     if (!r.Time) return false;
 
     if (sectorKey && r.sectorKey !== sectorKey) return false;
     if (projectKey && r.projectKey !== projectKey) return false;
 
-    // Day filter
     if (selectedDayISO) {
       const dISO = (r.payment_request_date || "").trim();
       if (dISO !== selectedDayISO) return false;
@@ -238,11 +230,7 @@ function applyFiltersEmails(rows) {
 // Aggregations
 // ============================
 function uniqueEmailCount(rows) {
-  const s = new Set();
-  rows.forEach(r => {
-    if (r.Time) s.add(r.Time);
-  });
-  return s.size;
+  return new Set(rows.map(r => r.Time).filter(Boolean)).size;
 }
 
 function sumBy(rows, key) {
@@ -250,7 +238,6 @@ function sumBy(rows, key) {
 }
 
 function topProjectByEmailCount(rows) {
-  // Count unique Time per project
   const map = new Map(); // project -> Set(Time)
   rows.forEach(r => {
     const p = r.project || "(بدون مشروع)";
@@ -260,14 +247,12 @@ function topProjectByEmailCount(rows) {
 
   let bestProject = "—";
   let bestCount = 0;
-
   map.forEach((set, project) => {
     if (set.size > bestCount) {
       bestCount = set.size;
       bestProject = project;
     }
   });
-
   return { project: bestProject, count: bestCount };
 }
 
@@ -280,19 +265,16 @@ function topProjectByPaidValue(rows) {
 
   let bestProject = "—";
   let bestVal = 0;
-
   map.forEach((v, project) => {
     if (v > bestVal) {
       bestVal = v;
       bestProject = project;
     }
   });
-
   return { project: bestProject, paid: bestVal };
 }
 
 function groupDailyTotals(rows) {
-  // daily sums for chart: based on payment_request_date
   const map = new Map(); // iso -> {iso,label,total,paid, emails(Set)}
   rows.forEach(r => {
     const iso = (r.payment_request_date || "").trim();
@@ -305,13 +287,11 @@ function groupDailyTotals(rows) {
     o.paid  += (r.amount_paid  || 0);
     o.emails.add(r.Time);
   });
-
   return Array.from(map.values()).sort((a, b) => a.iso.localeCompare(b.iso));
 }
 
 function groupSummaryByDaySectorProject(rows) {
-  // table: day + sector + project, emails count, total, paid
-  const map = new Map(); // key -> agg
+  const map = new Map();
   rows.forEach(r => {
     const dayISO = (r.payment_request_date || "").trim() || "—";
     const key = `${dayISO}||${r.sector}||${r.project}`;
@@ -338,8 +318,7 @@ function groupSummaryByDaySectorProject(rows) {
 }
 
 function groupByEmailTime(rows) {
-  // detail table: one row per unique Time (email)
-  const map = new Map(); // time -> agg
+  const map = new Map();
   rows.forEach(r => {
     const t = r.Time;
     if (!t) return;
@@ -357,7 +336,7 @@ function groupByEmailTime(rows) {
     }
     const o = map.get(t);
     o.total += (r.amount_total || 0);
-    o.paid  += (r.amount_paid || 0);
+    o.paid  += (r.amount_paid  || 0);
   });
 
   const out = Array.from(map.values());
@@ -366,7 +345,7 @@ function groupByEmailTime(rows) {
 }
 
 // ============================
-// Chart render (2 bars per day + values + day label)
+// Chart render
 // ============================
 function renderChart(daily, selectedDayISO) {
   const chart = document.getElementById("chart");
@@ -388,7 +367,6 @@ function renderChart(daily, selectedDayISO) {
   chart.innerHTML = last15.map(d => {
     const hTotal = Math.round((d.total / maxVal) * 100);
     const hPaid  = Math.round((d.paid  / maxVal) * 100);
-
     const active = selectedDayISO && d.iso === selectedDayISO;
 
     return `
@@ -406,16 +384,13 @@ function renderChart(daily, selectedDayISO) {
     `;
   }).join("");
 
-  // Selected day stats
   if (selectedStats) {
     if (selectedDayISO) {
       const found = daily.find(x => x.iso === selectedDayISO);
       if (found) {
         selectedStats.innerHTML =
           `اليوم ${found.label} — عدد الإيميلات: <b>${found.emails.size}</b> | طلب صرف: <b>${fmtMoney(found.total)}</b> | مصروف: <b>${fmtMoney(found.paid)}</b>`;
-      } else {
-        selectedStats.textContent = "";
-      }
+      } else selectedStats.textContent = "";
     } else {
       selectedStats.innerHTML = `عمود 1 = طلب صرف | عمود 2 = مصروف`;
     }
@@ -437,7 +412,7 @@ function render() {
   document.getElementById("kpi_total_amount").textContent = fmtMoney(totalAmount);
   document.getElementById("kpi_paid_amount").textContent = fmtMoney(paidAmount);
 
-  // Top project (by unique emails count + by paid value)
+  // Top project
   const topCount = topProjectByEmailCount(filtered);
   const topPaid = topProjectByPaidValue(filtered);
 
@@ -447,7 +422,7 @@ function render() {
   document.getElementById("kpi_top_paid_project").textContent = topPaid.project;
   document.getElementById("kpi_top_paid_value").textContent = fmtMoney(topPaid.paid);
 
-  // Meta (simple)
+  // Meta
   const sectorSelText = document.getElementById("sector").selectedOptions[0]?.textContent || "الكل";
   const projectSel = document.getElementById("project").value || "الكل";
   const dayISO = getSelectedDayISO();
@@ -462,7 +437,7 @@ function render() {
   const daily = groupDailyTotals(filtered);
   renderChart(daily, dayISO);
 
-  // Summary table (day + sector + project)
+  // Summary table
   const summary = groupSummaryByDaySectorProject(filtered);
   const summaryBody = document.getElementById("summary_rows");
   summaryBody.innerHTML = summary.map(r => `
@@ -476,7 +451,7 @@ function render() {
     </tr>
   `).join("");
 
-  // Detail table (one row per email time)
+  // Detail table
   const detail = groupByEmailTime(filtered);
   const detailBody = document.getElementById("detail_rows");
   detailBody.innerHTML = detail.map(r => `
@@ -504,7 +479,7 @@ async function init() {
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
-  // Build sector -> projects mapping (from ALL rows with projectKey)
+  // Build sector -> projects mapping
   projectsBySector = new Map();
   data.forEach(r => {
     if (!r.projectKey) return;
@@ -512,18 +487,18 @@ async function init() {
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
-  // Sector dropdown: value = sectorKey, label = sectorLabel
+  // Sector dropdown
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = document.getElementById("sector");
   sectorSel.innerHTML =
     `<option value="">الكل</option>` +
     sectorKeys.map(sk => `<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
-  // Project dropdown initially: all projects
+  // Project dropdown
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
 
-  // Day list based on E-mails rows only (Time exists + vendor exists)
-  const emailRowsAll = data.filter(r => r.vendor && r.Time);
+  // Build day list from rows that have Time only
+  const emailRowsAll = data.filter(r => r.Time);
   buildDayListOptions(emailRowsAll);
 
   // Events
@@ -531,7 +506,6 @@ async function init() {
     rebuildProjectDropdownForSector();
     render();
   });
-
   document.getElementById("project").addEventListener("change", render);
 
   const dayKey = document.getElementById("day_key");
