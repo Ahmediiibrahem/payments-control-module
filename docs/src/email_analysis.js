@@ -2,11 +2,13 @@ import { HEADER_MAP } from "./schema.js";
 
 let data = [];
 
-let projectsBySector = new Map();  // sectorKey -> Set(projectKey)
-let sectorLabelByKey = new Map();  // sectorKey -> label
-let projectLabelByKey = new Map(); // projectKey -> label
+let projectsBySector = new Map();
+let sectorLabelByKey = new Map();
+let projectLabelByKey = new Map();
 
 let dayLabelToISO = new Map();
+
+let emailDetailsMap = new Map(); // Time -> rows (filtered)
 
 // ============================
 // Helpers
@@ -34,14 +36,12 @@ function parseDateSmart(s) {
   const t = normText(s);
   if (!t || t === "-" || t === "0") return null;
 
-  // YYYY-MM-DD
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
   if (m) {
     const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
     return isNaN(d.getTime()) ? null : d;
   }
 
-  // M/D/YYYY or D/M/YYYY
   m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
   if (m) {
     const a = +m[1], b = +m[2], y = +m[3];
@@ -91,7 +91,7 @@ function rebuildProjectDropdownForSector() {
 }
 
 // ============================
-// CSV Parse
+// CSV
 // ============================
 function parseCSV(text) {
   const res = Papa.parse(text, {
@@ -107,9 +107,6 @@ function parseCSV(text) {
   return res.data || [];
 }
 
-// ============================
-// Normalize Row
-// ============================
 function normalizeRow(raw) {
   const row = {};
   let timeFromRaw = "";
@@ -119,7 +116,6 @@ function normalizeRow(raw) {
     const mapped = HEADER_MAP[kNorm] || kNorm;
     row[mapped] = value;
 
-    // capture time even if Arabic
     const kLower = kNorm.toLowerCase();
     if (kLower === "time" || kLower === "mail_time" || kLower === "email_time" || kNorm === "التايم" || kNorm === "الوقت") {
       timeFromRaw = value;
@@ -146,8 +142,12 @@ function normalizeRow(raw) {
     sector: sectorLabel,
     project: projectLabel,
 
+    // needed for modal
+    code: normText(row.code),
+    vendor: normText(row.vendor),
     amount_total: toNumber(row.amount_total),
     amount_paid: toNumber(row.amount_paid),
+    amount_remaining: toNumber(row.amount_remaining),
 
     payment_request_date: payReqDateStr,
     _payReqDate: payReqDate,
@@ -157,7 +157,7 @@ function normalizeRow(raw) {
 }
 
 // ============================
-// Date label helpers (FIX — no more "—")
+// Date label helpers
 // ============================
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -178,7 +178,7 @@ function labelFromISO(iso){
 }
 
 // ============================
-// Day list for datalist search
+// Day list
 // ============================
 function buildDayListOptions(emailRows) {
   const dayISOs = uniqSorted(
@@ -196,7 +196,7 @@ function buildDayListOptions(emailRows) {
     dayLabelToISO.set(label, iso);
 
     const opt = document.createElement("option");
-    opt.value = label; // searchable like "31-"
+    opt.value = label;
     dl.appendChild(opt);
   });
 }
@@ -211,14 +211,11 @@ function getSelectedDayISO() {
 
 // ============================
 // Filters (Emails page)
-// Only rule: must have Time
 // ============================
 function applyFiltersEmails(rows) {
   const sectorKey = document.getElementById("sector").value;
-
   const projectLabel = document.getElementById("project").value;
   const projectKey = normText(projectLabel);
-
   const selectedDayISO = getSelectedDayISO();
 
   return rows.filter(r => {
@@ -231,7 +228,6 @@ function applyFiltersEmails(rows) {
       const iso = toISODateUTC(r._payReqDate);
       if (iso !== selectedDayISO) return false;
     }
-
     return true;
   });
 }
@@ -248,7 +244,7 @@ function sumBy(rows, key) {
 }
 
 function topProjectByEmailCount(rows) {
-  const map = new Map(); // project -> Set(Time)
+  const map = new Map();
   rows.forEach(r => {
     const p = r.project || "(بدون مشروع)";
     if (!map.has(p)) map.set(p, new Set());
@@ -267,7 +263,7 @@ function topProjectByEmailCount(rows) {
 }
 
 function topProjectByPaidValue(rows) {
-  const map = new Map(); // project -> sumPaid
+  const map = new Map();
   rows.forEach(r => {
     const p = r.project || "(بدون مشروع)";
     map.set(p, (map.get(p) || 0) + (r.amount_paid || 0));
@@ -285,13 +281,12 @@ function topProjectByPaidValue(rows) {
 }
 
 function groupDailyTotals(rows) {
-  const map = new Map(); // iso -> {iso,label,total,paid, emails(Set)}
+  const map = new Map();
   rows.forEach(r => {
     const d = r._payReqDate;
     if (!d) return;
 
     const iso = toISODateUTC(d);
-
     if (!map.has(iso)) {
       map.set(iso, { iso, label: labelFromISO(iso), total: 0, paid: 0, emails: new Set() });
     }
@@ -329,8 +324,22 @@ function groupSummaryByDaySectorProject(rows) {
   });
 
   const out = Array.from(map.values());
-  out.sort((a, b) => (a.iso || "").localeCompare(b.iso || "") || a.project.localeCompare(b.project));
+  out.sort((a, b) => (b.iso || "").localeCompare(a.iso || "") || a.project.localeCompare(b.project)); // newest first
   return out;
+}
+
+function buildEmailDetailsMap(rows) {
+  const map = new Map(); // Time -> rows
+  rows.forEach(r => {
+    if (!r.Time) return;
+    if (!map.has(r.Time)) map.set(r.Time, []);
+    map.get(r.Time).push(r);
+  });
+  // Optional: sort inside each email by vendor/code for nice popup
+  map.forEach(arr => {
+    arr.sort((a,b) => (a.vendor||"").localeCompare(b.vendor||"") || (a.code||"").localeCompare(b.code||""));
+  });
+  return map;
 }
 
 function groupByEmailTime(rows) {
@@ -358,16 +367,15 @@ function groupByEmailTime(rows) {
   });
 
   const out = Array.from(map.values());
-  out.sort((a, b) => (a.iso || "").localeCompare(b.iso || "") || a.time.localeCompare(b.time));
+
+  // ✅ newest -> oldest (date desc), then time desc (string compare ok)
+  out.sort((a, b) => (b.iso || "").localeCompare(a.iso || "") || (b.time || "").localeCompare(a.time || ""));
+
   return out;
 }
 
 // ============================
-// Chart render (STACKED)
-// - One bar per day (height by total)
-// - Paid portion inside + percent text
-// - Total amount above bar
-// - Day label under bar
+// Chart (STACKED) — unchanged
 // ============================
 function renderChart(daily, selectedDayISO) {
   const chart = document.getElementById("chart");
@@ -389,7 +397,6 @@ function renderChart(daily, selectedDayISO) {
     const heightPct = Math.round((d.total / maxTotal) * 100);
     const paidPct = d.total > 0 ? Math.round((d.paid / d.total) * 100) : 0;
     const paidHeight = Math.max(0, Math.min(100, paidPct));
-
     const active = selectedDayISO && d.iso === selectedDayISO;
 
     return `
@@ -414,13 +421,64 @@ function renderChart(daily, selectedDayISO) {
         const pct = found.total > 0 ? Math.round((found.paid / found.total) * 100) : 0;
         selectedStats.innerHTML =
           `اليوم ${found.label} — عدد الإيميلات: <b>${found.emails.size}</b> | إجمالي: <b>${fmtMoney(found.total)}</b> | مصروف: <b>${fmtMoney(found.paid)}</b> | التقدم: <b>${pct}%</b>`;
-      } else {
-        selectedStats.textContent = "";
-      }
+      } else selectedStats.textContent = "";
     } else {
       selectedStats.innerHTML = `داخل العمود: نسبة الصرف (Paid %) — وفوقه إجمالي طلبات الصرف`;
     }
   }
+}
+
+// ============================
+// Modal
+// ============================
+function openModalForEmail(timeKey){
+  const modal = document.getElementById("emailModal");
+  const closeBtn = document.getElementById("modalClose");
+  const title = document.getElementById("modalTitle");
+  const sub = document.getElementById("modalSub");
+  const tbody = document.getElementById("modalRows");
+
+  const rows = emailDetailsMap.get(timeKey) || [];
+  if (!rows.length) return;
+
+  const first = rows[0];
+  const sector = first.sector || "—";
+  const project = first.project || "—";
+
+  const total = rows.reduce((a,x)=>a+(x.amount_total||0),0);
+  const paid  = rows.reduce((a,x)=>a+(x.amount_paid||0),0);
+
+  title.textContent = `${sector} — ${project}`;
+  sub.textContent = `إجمالي قيمة الإيميل: ${fmtMoney(total)} | المصروف: ${fmtMoney(paid)} | Time: ${timeKey}`;
+
+  tbody.innerHTML = rows.map((r,idx)=>`
+    <tr>
+      <td>${idx+1}</td>
+      <td>${r.code || "—"}</td>
+      <td>${r.vendor || "—"}</td>
+      <td>${fmtMoney(r.amount_total)}</td>
+      <td>${fmtMoney(r.amount_paid)}</td>
+      <td>${fmtMoney(r.amount_remaining)}</td>
+    </tr>
+  `).join("");
+
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden","false");
+
+  const onEsc = (e)=>{ if(e.key==="Escape") close(); };
+  const onBackdrop = (e)=>{ if(e.target === modal) close(); };
+
+  function close(){
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden","true");
+    document.removeEventListener("keydown", onEsc);
+    modal.removeEventListener("click", onBackdrop);
+    closeBtn.removeEventListener("click", close);
+  }
+
+  document.addEventListener("keydown", onEsc);
+  modal.addEventListener("click", onBackdrop);
+  closeBtn.addEventListener("click", close);
 }
 
 // ============================
@@ -429,6 +487,10 @@ function renderChart(daily, selectedDayISO) {
 function render() {
   const filtered = applyFiltersEmails(data);
 
+  // keep map for modal (only current filtered view)
+  emailDetailsMap = buildEmailDetailsMap(filtered);
+
+  // KPIs
   const emailsCount = uniqueEmailCount(filtered);
   const totalAmount = sumBy(filtered, "amount_total");
   const paidAmount = sumBy(filtered, "amount_paid");
@@ -442,23 +504,45 @@ function render() {
 
   document.getElementById("kpi_top_count_project").textContent = topCount.project;
   document.getElementById("kpi_top_count_value").textContent = `${topCount.count} Email`;
-
   document.getElementById("kpi_top_paid_project").textContent = topPaid.project;
   document.getElementById("kpi_top_paid_value").textContent = fmtMoney(topPaid.paid);
 
+  // Meta
   const sectorSelText = document.getElementById("sector").selectedOptions[0]?.textContent || "الكل";
   const projectSel = document.getElementById("project").value || "الكل";
   const dayISO = getSelectedDayISO();
   const dayLabel = dayISO ? labelFromISO(dayISO) : "الكل";
 
   const meta = document.getElementById("meta");
-  if (meta) {
-    meta.textContent = `المعروض: ${filtered.length} | قطاع: ${sectorSelText} | مشروع: ${projectSel} | اليوم: ${dayLabel}`;
-  }
+  if (meta) meta.textContent = `المعروض: ${filtered.length} | قطاع: ${sectorSelText} | مشروع: ${projectSel} | اليوم: ${dayLabel}`;
 
+  // Chart
   const daily = groupDailyTotals(filtered);
   renderChart(daily, dayISO);
 
+  // ✅ DETAILS TABLE (newest first + clickable)
+  const detail = groupByEmailTime(filtered);
+  const detailBody = document.getElementById("detail_rows");
+  detailBody.innerHTML = detail.map(r => `
+    <tr class="clickable-row" data-time="${r.time}">
+      <td>${r.dayLabel}</td>
+      <td>${r.sector}</td>
+      <td>${r.project}</td>
+      <td class="mono">${r.time}</td>
+      <td>${fmtMoney(r.total)}</td>
+      <td>${fmtMoney(r.paid)}</td>
+    </tr>
+  `).join("");
+
+  // bind click
+  detailBody.querySelectorAll("tr.clickable-row").forEach(tr => {
+    tr.addEventListener("click", () => {
+      const t = tr.getAttribute("data-time");
+      openModalForEmail(t);
+    });
+  });
+
+  // SUMMARY TABLE
   const summary = groupSummaryByDaySectorProject(filtered);
   document.getElementById("summary_rows").innerHTML = summary.map(r => `
     <tr>
@@ -466,18 +550,6 @@ function render() {
       <td>${r.sector}</td>
       <td>${r.project}</td>
       <td>${r.emails.size}</td>
-      <td>${fmtMoney(r.total)}</td>
-      <td>${fmtMoney(r.paid)}</td>
-    </tr>
-  `).join("");
-
-  const detail = groupByEmailTime(filtered);
-  document.getElementById("detail_rows").innerHTML = detail.map(r => `
-    <tr>
-      <td>${r.dayLabel}</td>
-      <td>${r.sector}</td>
-      <td>${r.project}</td>
-      <td class="mono">${r.time}</td>
       <td>${fmtMoney(r.total)}</td>
       <td>${fmtMoney(r.paid)}</td>
     </tr>
@@ -497,6 +569,7 @@ async function init() {
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
+  // sector -> projects
   projectsBySector = new Map();
   data.forEach(r => {
     if (!r.projectKey) return;
@@ -516,6 +589,7 @@ async function init() {
   const emailRowsAll = data.filter(r => r.Time && r._payReqDate);
   buildDayListOptions(emailRowsAll);
 
+  // Events
   document.getElementById("sector").addEventListener("change", () => {
     rebuildProjectDropdownForSector();
     render();
