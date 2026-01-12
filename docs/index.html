@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cash Control Dashboard – مطالبات المشاريع</title>
+  <title>Cash Control Dashboard</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,46 +15,45 @@
 <body>
   <div class="container">
 
-    <!-- ✅ Unified Topbar -->
+    <!-- ✅ Unified Topbar: Title center + button top-left -->
     <div class="topbar">
       <div class="nav-left">
         <a class="btn" href="./email-analysis.html">E-Mails Analysis</a>
       </div>
 
-      <h1 class="page-title">Cash Control Dashboard – مطالبات المشاريع</h1>
+      <h1 class="page-title">Cash Control Dashboard</h1>
 
       <div class="nav-spacer"></div>
     </div>
 
-    <!-- ✅ KPIs (مع الحفاظ على IDs) -->
+    <!-- ✅ KPIs (IDs EXACTLY as app.js expects) -->
     <div class="grid kpi">
       <div class="card kpi-card">
         <div class="kpi-label">إجمالي المطالبات</div>
         <div class="kpi-value" id="kpi_total">—</div>
-        <!-- بعض النسخ من app.js بتكتب عدد المطالبات هنا -->
         <div class="kpi-sub" id="kpi_count">—</div>
       </div>
 
       <div class="card kpi-card">
-        <div class="kpi-label">إجمالي المنصرف (Paid)</div>
+        <div class="kpi-label">المنصرف (Paid)</div>
         <div class="kpi-value" id="kpi_paid">—</div>
-        <div class="kpi-sub" id="kpi_paid_count"> </div>
+        <div class="kpi-sub" id="kpi_paid_count">—</div>
       </div>
 
       <div class="card kpi-card">
         <div class="kpi-label">غير المنصرف (Pending)</div>
-        <div class="kpi-value" id="kpi_remaining">—</div>
-        <div class="kpi-sub" id="kpi_pending_count"> </div>
+        <div class="kpi-value" id="kpi_pending">—</div>
+        <div class="kpi-sub" id="kpi_pending_count">—</div>
       </div>
 
       <div class="card kpi-card">
         <div class="kpi-label">الملغي</div>
         <div class="kpi-value" id="kpi_canceled">—</div>
-        <div class="kpi-sub" id="kpi_canceled_count"> </div>
+        <div class="kpi-sub" id="kpi_canceled_count">—</div>
       </div>
     </div>
 
-    <!-- ✅ Filters (IDs لازم تفضل ثابتة) -->
+    <!-- Filters -->
     <div class="card" style="margin-top:12px;">
       <div class="filters">
 
@@ -72,17 +71,13 @@
           </label>
 
           <label>الحالة:
-            <select id="status">
-              <option value="">الكل</option>
-              <option value="Paid">منصرف</option>
-              <option value="Pending">متبقي</option>
-            </select>
+            <select id="status"></select>
           </label>
 
           <label>نوع التاريخ:
             <select id="date_type">
               <option value="payment_request_date">(C) تاريخ طلب الصرف</option>
-              <option value="source_request_date">(S) تاريخ الطلب من المشروع</option>
+              <option value="source_request_date" selected>(S) تاريخ الطلب من المشروع</option>
             </select>
           </label>
         </div>
@@ -98,24 +93,27 @@
 
           <div class="btn-row">
             <button id="clearBtn">مسح</button>
-
-            <!-- لو app.js عندك بيستخدم زر تصدير قديم نخليه موجود لكن مخفي -->
-            <button id="exportBtn" style="display:none;">تصدير CSV</button>
+            <button id="exportBtn">تصدير CSV</button>
           </div>
         </div>
 
-        <!-- لو app.js بيستخدم Data Quality IDs نخليهم موجودين (مخفيين) -->
-        <div style="display:none;">
-          <span id="dq_total"></span>
-          <span id="dq_excluded_vendor"></span>
-          <span id="dq_missing_project"></span>
-          <span id="dq_bad_dates"></span>
+        <!-- ✅ meta exists (app.js writes here) -->
+        <div class="small">
+          <span id="meta">—</span>
+        </div>
+
+        <!-- ✅ Data Quality IDs exist (app.js writes here) -->
+        <div class="small" style="display:flex;gap:14px;flex-wrap:wrap; margin-top:8px;">
+          <span>إجمالي الصفوف: <b id="dq_total">—</b></span>
+          <span>بدون مورد: <b id="dq_excluded_vendor">—</b></span>
+          <span>بدون مشروع: <b id="dq_missing_project">—</b></span>
+          <span>تواريخ غير صالحة: <b id="dq_bad_dates">—</b></span>
         </div>
 
       </div>
     </div>
 
-    <!-- ✅ Table (ID rows لازم يفضل موجود) -->
+    <!-- Table -->
     <div class="card" style="margin-top:12px;">
       <div class="muted">تفاصيل المطالبات</div>
 
