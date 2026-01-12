@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" dir="rtl">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -12,6 +12,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="./assets/css/main.css">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-GCPTV6MHRT');
+  </script>
 </head>
 
 <body>
@@ -87,39 +96,14 @@
     <!-- Chart -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">قيمة طلبات الصرف (آخر 15 يوم)</div>
-
-      <!-- hint موجود لكن هنخليه فاضي من JS -->
       <div id="chart_hint" class="small muted" style="margin-top:6px;"></div>
-
       <div id="chart" class="chart" style="margin-top:10px;"></div>
-
       <div id="selected_day_stats" class="small" style="margin-top:10px;"></div>
     </div>
 
-    <!-- Summary Table -->
+    <!-- ✅ DETAILS TABLE (moved here, under chart) -->
     <div class="card" style="margin-top:12px;">
-      <div class="card-title">ملخص يومي — لكل مشروع (عدد الإيميلات + القيمة)</div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>اليوم</th>
-              <th>القطاع</th>
-              <th>المشروع</th>
-              <th>عدد الإيميلات</th>
-              <th>قيمة طلبات الصرف</th>
-              <th>قيمة المصروف</th>
-            </tr>
-          </thead>
-          <tbody id="summary_rows"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Detail Table -->
-    <div class="card" style="margin-top:12px;">
-      <div class="card-title">تفاصيل الإيميلات بعد الفلتر</div>
+      <div class="card-title">تفاصيل الإيميلات بعد الفلتر (اضغط على أي سطر للتفاصيل)</div>
 
       <div class="table-wrap">
         <table>
@@ -138,6 +122,57 @@
       </div>
     </div>
 
+    <!-- SUMMARY TABLE (now below) -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">ملخص يومي — لكل مشروع (عدد الإيميلات + القيمة)</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>اليوم</th>
+              <th>القطاع</th>
+              <th>المشروع</th>
+              <th>عدد الإيميلات</th>
+              <th>قيمة طلبات الصرف</th>
+              <th>قيمة المصروف</th>
+            </tr>
+          </thead>
+          <tbody id="summary_rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ✅ Modal -->
+  <div id="emailModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div id="modalTitle" class="modal-title">—</div>
+          <div id="modalSub" class="modal-sub">—</div>
+        </div>
+        <button id="modalClose" class="modal-close" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>مسلسل</th>
+                <th>الكود</th>
+                <th>اسم المورد</th>
+                <th>القيمة</th>
+                <th>المنصرف</th>
+                <th>المتبقي</th>
+              </tr>
+            </thead>
+            <tbody id="modalRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
