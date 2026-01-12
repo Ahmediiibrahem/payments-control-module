@@ -4,70 +4,54 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cash Control Dashboard – مطالبات المشاريع</title>
-  <div class="topbar">
-  <div class="links">
-    <a class="btn" href="./email-analysis.html">
-      E-Mails Analysis
-    </a>
-  </div>
-</div>
-
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css">
 
-  
+  <link rel="stylesheet" href="./assets/css/main.css">
 </head>
 
 <body>
   <div class="container">
 
-    <h1>Cash Control Dashboard – مطالبات المشاريع</h1>
-
-    <!-- KPIs -->
-    <div class="grid kpi">
-      <div class="card kpi">
-        <div class="muted">إجمالي المطالبات</div>
-        <div class="value" id="kpi_total">—</div>
-        <div class="small" id="kpi_count">—</div>
+    <!-- ✅ Unified Topbar -->
+    <div class="topbar">
+      <div class="nav-left">
+        <a class="btn" href="./email-analysis.html">E-Mails Analysis</a>
       </div>
 
-      <div class="card kpi">
-        <div class="muted">المنصرف (Paid)</div>
-        <div class="value" id="kpi_paid">—</div>
-        <div class="small" id="kpi_paid_count">—</div>
-      </div>
+      <h1 class="page-title">Cash Control Dashboard – مطالبات المشاريع</h1>
 
-      <div class="card kpi">
-        <div class="muted">غير المصروف (Pending)</div>
-        <div class="value" id="kpi_pending">—</div>
-        <div class="small" id="kpi_pending_count">—</div>
-      </div>
-
-      <div class="card kpi">
-        <div class="muted">الملغي</div>
-        <div class="value" id="kpi_canceled">—</div>
-        <div class="small" id="kpi_canceled_count">—</div>
-      </div>
+      <div class="nav-spacer"></div>
     </div>
 
-    <!-- Data Quality -->
-    <div class="card" style="margin-top:12px;">
-      <div class="dq-row">
-        <div>إجمالي الصفوف: <b id="dq_total">—</b></div>
-        <div>مستبعدة (بدون مورد): <b id="dq_excluded_vendor">—</b></div>
-        <div>بدون مشروع: <b id="dq_missing_project">—</b></div>
-        <div>تواريخ غير صالحة: <b id="dq_bad_dates">—</b></div>
+    <!-- ✅ Unified KPI cards (same size/style as emails page) -->
+    <div class="grid kpi">
+      <div class="card kpi-card">
+        <div class="kpi-label">إجمالي المطالبات</div>
+        <div class="kpi-value" id="kpi_total">—</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">إجمالي المنصرف (Paid)</div>
+        <div class="kpi-value" id="kpi_paid">—</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">غير المنصرف (Pending)</div>
+        <div class="kpi-value" id="kpi_remaining">—</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">الملغي</div>
+        <div class="kpi-value" id="kpi_canceled">—</div>
       </div>
     </div>
 
     <!-- Filters -->
     <div class="card" style="margin-top:12px;">
       <div class="filters">
-
-        <!-- Row 1 -->
         <div class="filter-row">
           <label>القطاع:
             <select id="sector"></select>
@@ -77,54 +61,46 @@
             <select id="project"></select>
           </label>
 
-          <div></div><div></div>
-        </div>
-
-        <!-- Row 2 -->
-        <div class="filter-row">
           <label>بند الحسابات:
             <select id="account_item"></select>
           </label>
 
           <label>الحالة:
-            <select id="status"></select>
-          </label>
-
-          <div></div><div></div>
-        </div>
-
-        <!-- Row 3 -->
-        <div class="filter-row">
-          <label>نوع التاريخ:
-            <select id="date_type">
-              <option value="source_request_date">تاريخ الطلب (من المشروع)</option>
-              <option value="payment_request_date">تاريخ طلب الصرف</option>
+            <select id="status">
+              <option value="">الكل</option>
+              <option value="Paid">منصرف</option>
+              <option value="Pending">متبقي</option>
             </select>
           </label>
 
+          <label>نوع التاريخ:
+            <select id="date_type">
+              <option value="payment_request_date">(C) تاريخ طلب الصرف</option>
+              <option value="source_request_date">(S) تاريخ الطلب من المشروع</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-row">
           <label>من:
-            <input id="date_from" type="date" />
+            <input type="date" id="date_from">
           </label>
 
           <label>إلى:
-            <input id="date_to" type="date" />
+            <input type="date" id="date_to">
           </label>
 
           <div class="btn-row">
-            <button id="clearBtn" title="مسح الفلاتر">مسح</button>
-            <button id="exportBtn" title="تصدير النتائج الحالية CSV">تصدير CSV</button>
+            <button id="clearBtn">مسح</button>
           </div>
         </div>
-
-        <div class="small" style="margin-top:2px;">
-          <span id="meta">—</span>
-        </div>
-
       </div>
     </div>
 
     <!-- Table -->
     <div class="card" style="margin-top:12px;">
+      <div class="muted">تفاصيل المطالبات</div>
+
       <div class="table-wrap">
         <table>
           <thead>
@@ -132,16 +108,16 @@
               <th>رقم الطلب</th>
               <th>الكود</th>
               <th>المورد</th>
-              <th>المبلغ</th>
+              <th>إجمالي المبلغ</th>
               <th>المنصرف</th>
               <th>الملغي</th>
               <th>المتبقي</th>
               <th>بند الحسابات</th>
               <th>المشروع</th>
-              <th>تاريخ الطلب (من المشروع)</th>
+              <th>تاريخ الطلب من المشروع</th>
               <th>تاريخ طلب الصرف</th>
-              <th>التعميد</th>
-              <th>الصرف</th>
+              <th>تاريخ التعميد</th>
+              <th>تاريخ الصرف</th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>
