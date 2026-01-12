@@ -4,6 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cash Control Dashboard – مطالبات المشاريع</title>
+  <div class="topbar">
+  <h1>Cash Control Dashboard – مطالبات المشاريع</h1>
+  <div class="links">
+    <a class="btn" href="./email-analysis.html">
+      تحليل الطلبات المرفوعة على الميل
+    </a>
+  </div>
+</div>
+
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -181,6 +190,36 @@
     .mono{
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
+
+    .topbar{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  gap:12px;
+  flex-wrap: wrap;
+  margin: 8px 0 14px;
+}
+
+.links{
+  display:flex;
+  gap:10px;
+  flex-wrap: wrap;
+}
+
+a.btn{
+  text-decoration:none;
+  color: var(--text);
+  border:1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-weight: 800;
+}
+
+a.btn:hover{
+  background: rgba(255,255,255,0.10);
+}
+
   </style>
 </head>
 
