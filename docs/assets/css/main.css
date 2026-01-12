@@ -9,6 +9,7 @@
   --accent:#6ea8fe;
 }
 
+/* ========== RESET ========== */
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
@@ -20,49 +21,71 @@ body{
   color:var(--text);
 }
 
+a{color:inherit;text-decoration:none}
+
+/* ========== LAYOUT ========== */
 .container{
   max-width:1280px;
   margin:0 auto;
   padding:18px;
 }
 
-/* ===== Topbar (centered buttons above title) ===== */
+/* ========== TOPBAR ========== */
 .topbar{
   margin-bottom:16px;
 }
 
-.nav-top{
+/* 🔒 NAV BUTTONS – FINAL & FIXED */
+.topbar .nav-top.nav-fixed{
   display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-}
-
-.nav-top.center{
-  justify-content:center;   /* ✅ في النص */
+  justify-content:center;
   align-items:center;
+  gap:12px;
+  flex-wrap:nowrap;          /* سطر واحد فقط */
+  white-space:nowrap;
+  margin-bottom:14px;
 }
 
-.nav-top .nav-btn{
-  width: 190px;             /* ✅ نفس العرض */
-  text-align:center;
+.topbar .nav-top.nav-fixed .nav-btn{
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+
+  width:230px;               /* على قد أطول جملة */
+  height:42px;
+
+  padding:0 14px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.06);
+
+  color:var(--text);
+  font-weight:800;
+  font-size:14px;
+  line-height:1;
 }
 
-/* title spacing from buttons */
+.topbar .nav-top.nav-fixed .nav-btn:hover{
+  background:rgba(255,255,255,.12);
+}
+
 .page-title{
-  margin-top:14px;          /* ✅ ينزل شوية عن الأزرار */
+  margin-top:6px;
   text-align:center;
   font-size:26px;
   font-weight:800;
 }
 
-/* ===== Cards & Grid ===== */
+/* ========== GRID & CARDS ========== */
 .grid{
   display:grid;
   gap:12px;
 }
+
 .grid.kpi{
   grid-template-columns:repeat(4,1fr);
 }
+
 @media(max-width:900px){
   .grid.kpi{grid-template-columns:repeat(2,1fr)}
 }
@@ -77,23 +100,26 @@ body{
 .kpi-card{
   text-align:center;
 }
+
 .kpi-label{
   font-size:13px;
   color:var(--muted);
   font-weight:700;
 }
+
 .kpi-value{
   font-size:22px;
   font-weight:800;
   margin-top:4px;
 }
+
 .kpi-sub{
   font-size:12px;
   color:var(--muted);
   margin-top:2px;
 }
 
-/* ===== Filters ===== */
+/* ========== FILTERS ========== */
 .filters label{
   font-size:12px;
   font-weight:700;
@@ -102,6 +128,7 @@ body{
   flex-direction:column;
   gap:4px;
 }
+
 .filters select,
 .filters input{
   background:#0b132b;
@@ -110,12 +137,14 @@ body{
   border-radius:10px;
   padding:6px 8px;
 }
+
 .filter-row{
   display:flex;
   gap:12px;
   flex-wrap:wrap;
   margin-bottom:10px;
 }
+
 .btn-row button{
   padding:7px 14px;
   border-radius:12px;
@@ -125,53 +154,64 @@ body{
   font-weight:800;
   cursor:pointer;
 }
-.btn-row button:hover{background:rgba(255,255,255,.14)}
+
+.btn-row button:hover{
+  background:rgba(255,255,255,.14);
+}
 
 .small{font-size:12px;color:var(--muted)}
 .muted{color:var(--muted)}
 .mono{font-family:ui-monospace,Menlo,monospace}
 
-/* ===== Tables ===== */
+/* ========== TABLES ========== */
 .table-wrap{overflow:auto}
+
 table{
   width:100%;
   border-collapse:collapse;
 }
+
 thead th{
   position:sticky;
   top:0;
   background:#0e1733;
   z-index:2;
 }
+
 th,td{
   padding:8px 10px;
   border-bottom:1px solid var(--border);
   font-size:13px;
   white-space:nowrap;
 }
+
 tbody tr:hover{
   background:rgba(255,255,255,.06);
 }
+
 .clickable-row{cursor:pointer}
 
-/* ===== Chart ===== */
+/* ========== CHART ========== */
 .chart{
   display:flex;
   gap:10px;
   align-items:flex-end;
   height:220px;
 }
+
 .chart-group{
   flex:1;
   display:flex;
   flex-direction:column;
   gap:6px;
 }
+
 .chart-bars{
   height:175px;
   display:flex;
   align-items:flex-end;
 }
+
 .bar-stack{
   width:100%;
   height:100%;
@@ -184,10 +224,12 @@ tbody tr:hover{
   flex-direction:column;
   justify-content:flex-end;
 }
+
 .bar-paid{
   background:rgba(255,255,255,.28);
   position:relative;
 }
+
 .bar-top-value{
   position:absolute;
   top:-18px;
@@ -196,6 +238,7 @@ tbody tr:hover{
   font-size:11px;
   font-weight:800;
 }
+
 .bar-percent{
   position:absolute;
   inset:0;
@@ -205,6 +248,7 @@ tbody tr:hover{
   font-size:12px;
   font-weight:800;
 }
+
 .chart-day{
   text-align:center;
   font-size:11px;
@@ -212,7 +256,7 @@ tbody tr:hover{
   font-weight:800;
 }
 
-/* ===== Modal ===== */
+/* ========== MODAL ========== */
 .modal-backdrop{
   position:fixed;
   inset:0;
@@ -222,21 +266,26 @@ tbody tr:hover{
   justify-content:center;
   z-index:9999;
 }
+
 .modal-backdrop.show{display:flex}
+
 .modal{
   width:min(900px,100%);
   background:linear-gradient(180deg,var(--card),var(--card2));
   border:1px solid var(--border);
   border-radius:18px;
 }
+
 .modal-head{
   display:flex;
   justify-content:space-between;
   padding:12px 14px;
   border-bottom:1px solid var(--border);
 }
+
 .modal-title{font-weight:800}
 .modal-sub{font-size:12px;color:var(--muted)}
+
 .modal-close{
   background:none;
   border:1px solid var(--border);
@@ -245,38 +294,5 @@ tbody tr:hover{
   font-weight:800;
   cursor:pointer;
 }
+
 .modal-body{padding:14px}
-
-
-/* ===== FORCE NAV BUTTONS (final override) ===== */
-.topbar .nav-top{
-  display:flex !important;
-  justify-content:center !important;
-  align-items:center !important;
-  gap:10px !important;
-  flex-wrap:wrap !important;
-  margin-bottom:14px !important;
-}
-
-.topbar .nav-top a.btn{
-  display:inline-flex !important;
-  justify-content:center !important;
-  align-items:center !important;
-  width:190px !important;          /* نفس العرض */
-  padding:10px 14px !important;
-  border-radius:14px !important;
-  border:1px solid rgba(255,255,255,.14) !important;
-  background:rgba(255,255,255,.06) !important;
-  color:rgba(233,236,246,.95) !important;
-  font-weight:800 !important;
-  text-decoration:none !important; /* يمنع شكل اللينك */
-}
-
-.topbar .nav-top a.btn:hover{
-  background:rgba(255,255,255,.12) !important;
-}
-
-.topbar .page-title{
-  margin-top:6px !important;       /* العنوان ينزل عن الأزرار */
-  text-align:center !important;
-}
