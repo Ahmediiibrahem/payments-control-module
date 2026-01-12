@@ -41,6 +41,7 @@
       padding: 22px;
     }
 
+    /* ✅ FIX: ensure topbar is ALWAYS clickable above everything */
     .topbar{
       display:flex;
       justify-content: space-between;
@@ -48,6 +49,10 @@
       gap:12px;
       flex-wrap: wrap;
       margin: 8px 0 14px;
+
+      position: relative;
+      z-index: 9999;
+      pointer-events: auto;
     }
 
     h1{
@@ -56,7 +61,15 @@
       font-weight: 800;
     }
 
-    .links{ display:flex; gap:10px; flex-wrap: wrap; }
+    .links{
+      display:flex;
+      gap:10px;
+      flex-wrap: wrap;
+
+      position: relative;
+      z-index: 10000;
+      pointer-events: auto;
+    }
 
     a.btn{
       text-decoration:none;
@@ -66,6 +79,10 @@
       padding: 10px 12px;
       border-radius: 14px;
       font-weight: 800;
+
+      position: relative;
+      z-index: 10001;
+      pointer-events: auto;
     }
     a.btn:hover{ background: rgba(255,255,255,0.10); }
 
@@ -76,6 +93,9 @@
       padding: 14px;
       box-shadow: var(--shadow);
       backdrop-filter: blur(10px);
+
+      position: relative;
+      z-index: 1;
     }
 
     .grid{ display:grid; gap: 14px; }
@@ -129,6 +149,9 @@
       height: 170px;
       padding-top: 6px;
       overflow:hidden;
+
+      position: relative;
+      z-index: 1;
     }
     .bar{
       flex: 1 1 0;
@@ -163,6 +186,9 @@
       border-radius: var(--radius);
       background:#0b1020;
       margin-top: 12px;
+
+      position: relative;
+      z-index: 1;
     }
     table{ width:100%; border-collapse:collapse; }
     th, td{
