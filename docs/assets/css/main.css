@@ -29,38 +29,32 @@ body{
   padding: 22px;
 }
 
-/* ===== Topbar (Unified) ===== */
+/* ===== Topbar (Buttons above title) ===== */
 .topbar{
-  display:grid;
-  grid-template-columns: 1fr auto 1fr;  /* left nav | centered title | spacer */
-  align-items:center;
-  gap:12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   margin: 8px 0 14px;
   position: relative;
   z-index: 9999;
-  pointer-events: auto;
 }
 
-/* ===== Navigation Buttons (Unified & Equal Width) ===== */
-.nav-left{
-  justify-self: end;        /* في RTL = الشمال */
+}
+
+/* Buttons row above title */
+.nav-top{
   display: flex;
   gap: 10px;
-  flex-wrap: nowrap;       /* 👈 يمنع كسر السطر */
-  position: relative;
-  z-index: 10000;
+  justify-content: center;
 }
 
-/* نفس العرض للزرين */
-.nav-left .btn{
-  min-width: 190px;        /* 👈 عرض موحد */
+/* Equal width buttons */
+.nav-top .btn{
+  min-width: 190px;
   text-align: center;
 }
 
-
-.nav-spacer{
-  justify-self: start;    /* RTL start = right */
-}
 
 .page-title{
   margin: 0;
