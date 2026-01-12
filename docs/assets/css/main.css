@@ -246,3 +246,37 @@ tbody tr:hover{
   cursor:pointer;
 }
 .modal-body{padding:14px}
+
+
+/* ===== FORCE NAV BUTTONS (final override) ===== */
+.topbar .nav-top{
+  display:flex !important;
+  justify-content:center !important;
+  align-items:center !important;
+  gap:10px !important;
+  flex-wrap:wrap !important;
+  margin-bottom:14px !important;
+}
+
+.topbar .nav-top a.btn{
+  display:inline-flex !important;
+  justify-content:center !important;
+  align-items:center !important;
+  width:190px !important;          /* نفس العرض */
+  padding:10px 14px !important;
+  border-radius:14px !important;
+  border:1px solid rgba(255,255,255,.14) !important;
+  background:rgba(255,255,255,.06) !important;
+  color:rgba(233,236,246,.95) !important;
+  font-weight:800 !important;
+  text-decoration:none !important; /* يمنع شكل اللينك */
+}
+
+.topbar .nav-top a.btn:hover{
+  background:rgba(255,255,255,.12) !important;
+}
+
+.topbar .page-title{
+  margin-top:6px !important;       /* العنوان ينزل عن الأزرار */
+  text-align:center !important;
+}
