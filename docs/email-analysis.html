@@ -1,181 +1,113 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>E-Mails Analysis</title>
 
-  <link rel="icon" type="image/png" href="./assets/favicon.png">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" href="./assets/favicon.png">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/main.css?v=10">
 
-  <link rel="stylesheet" href="./assets/css/main.css">
-
-  <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
   <script>
-    window.dataLayer = window.dataLayer || [];
+    window.dataLayer=window.dataLayer||[];
     function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-GCPTV6MHRT');
+    gtag('js',new Date());
+    gtag('config','G-GCPTV6MHRT');
   </script>
 </head>
 
 <body>
-  <div class="container">
+<div class="container">
 
-    <!-- Topbar: Buttons ABOVE title -->
-    <div class="topbar">
-      <div class="nav-top">
-        <a class="btn" href="./index.html">Cash Control Dashboard</a>
-        <a class="btn" href="./email-analysis.html">E-Mails Analysis</a>
-      </div>
-
-      <h1 class="page-title">E-Mails Analysis</h1>
+  <div class="topbar">
+    <div class="nav-top">
+      <a class="btn" href="./index.html">Cash Control Dashboard</a>
+      <a class="btn" href="./email-analysis.html">E-Mails Analysis</a>
     </div>
-
-    <!-- KPI Cards -->
-    <div class="grid kpi">
-      <div class="card kpi-card">
-        <div class="kpi-label">إجمالي الإيميلات</div>
-        <div class="kpi-value" id="kpi_emails">0</div>
-        <div class="kpi-sub"></div>
-      </div>
-
-      <div class="card kpi-card">
-        <div class="kpi-label">إجمالي طلبات الصرف</div>
-        <div class="kpi-value" id="kpi_total_amount">0</div>
-        <div class="kpi-sub"></div>
-      </div>
-
-      <div class="card kpi-card">
-        <div class="kpi-label">إجمالي المصروف</div>
-        <div class="kpi-value" id="kpi_paid_amount">0</div>
-        <div class="kpi-sub"></div>
-      </div>
-
-      <div class="card kpi-card">
-        <div class="kpi-label">أعلى مشروع</div>
-        <div class="kpi-sub" style="margin-top:2px;">
-          بالعدد: <b id="kpi_top_count_project">—</b> (<span id="kpi_top_count_value">0</span>)<br/>
-          بالمصروف: <b id="kpi_top_paid_project">—</b> (<span id="kpi_top_paid_value">0</span>)
-        </div>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="card" style="margin-top:12px;">
-      <div class="filters">
-        <div class="filter-row">
-          <label>القطاع:
-            <select id="sector"></select>
-          </label>
-
-          <label>المشروع:
-            <select id="project"></select>
-          </label>
-
-          <label>اليوم:
-            <input id="day_key" list="day_list" placeholder="اكتب يوم مثل 31-Jan..." />
-            <datalist id="day_list"></datalist>
-          </label>
-
-          <div class="btn-row">
-            <button id="clearBtn">مسح</button>
-          </div>
-        </div>
-
-        <div class="small">
-          <span id="meta">—</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Chart -->
-    <div class="card" style="margin-top:12px;">
-      <div class="card-title">قيمة طلبات الصرف (آخر 15 يوم)</div>
-      <div id="chart_hint" class="small muted" style="margin-top:6px;"></div>
-      <div id="chart" class="chart" style="margin-top:10px;"></div>
-      <div id="selected_day_stats" class="small" style="margin-top:10px;"></div>
-    </div>
-
-    <!-- ✅ DETAILS TABLE (moved here, under chart) -->
-    <div class="card" style="margin-top:12px;">
-      <div class="card-title">تفاصيل الإيميلات بعد الفلتر (اضغط على أي سطر للتفاصيل)</div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>اليوم</th>
-              <th>القطاع</th>
-              <th>المشروع</th>
-              <th>Time</th>
-              <th>قيمة طلبات الصرف</th>
-              <th>قيمة المصروف</th>
-            </tr>
-          </thead>
-          <tbody id="detail_rows"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- SUMMARY TABLE (now below) -->
-    <div class="card" style="margin-top:12px;">
-      <div class="card-title">ملخص يومي — لكل مشروع (عدد الإيميلات + القيمة)</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>اليوم</th>
-              <th>القطاع</th>
-              <th>المشروع</th>
-              <th>عدد الإيميلات</th>
-              <th>قيمة طلبات الصرف</th>
-              <th>قيمة المصروف</th>
-            </tr>
-          </thead>
-          <tbody id="summary_rows"></tbody>
-        </table>
-      </div>
-    </div>
-
+    <h1 class="page-title">E-Mails Analysis</h1>
   </div>
 
-  <!-- ✅ Modal -->
-  <div id="emailModal" class="modal-backdrop" aria-hidden="true">
-    <div class="modal">
-      <div class="modal-head">
-        <div>
-          <div id="modalTitle" class="modal-title">—</div>
-          <div id="modalSub" class="modal-sub">—</div>
-        </div>
-        <button id="modalClose" class="modal-close" aria-label="Close">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>مسلسل</th>
-                <th>الكود</th>
-                <th>اسم المورد</th>
-                <th>القيمة</th>
-                <th>المنصرف</th>
-                <th>المتبقي</th>
-              </tr>
-            </thead>
-            <tbody id="modalRows"></tbody>
-          </table>
-        </div>
+  <!-- KPIs -->
+  <div class="grid kpi">
+    <div class="card kpi-card">
+      <div class="kpi-label">إجمالي الإيميلات</div>
+      <div class="kpi-value" id="kpi_emails">0</div>
+    </div>
+    <div class="card kpi-card">
+      <div class="kpi-label">إجمالي طلبات الصرف</div>
+      <div class="kpi-value" id="kpi_total_amount">0</div>
+    </div>
+    <div class="card kpi-card">
+      <div class="kpi-label">إجمالي المصروف</div>
+      <div class="kpi-value" id="kpi_paid_amount">0</div>
+    </div>
+    <div class="card kpi-card">
+      <div class="kpi-label">أعلى مشروع</div>
+      <div class="kpi-sub">
+        بالعدد: <b id="kpi_top_count_project">—</b><br>
+        بالمصروف: <b id="kpi_top_paid_project">—</b>
       </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script type="module" src="./src/email_analysis.js"></script>
+  <!-- Chart -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-title">قيمة طلبات الصرف (آخر 15 يوم)</div>
+    <div id="chart" class="chart"></div>
+  </div>
+
+  <!-- Details Table -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-title">تفاصيل الإيميلات (اضغط على أي سطر)</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>اليوم</th>
+            <th>القطاع</th>
+            <th>المشروع</th>
+            <th>Time</th>
+            <th>القيمة</th>
+            <th>المنصرف</th>
+          </tr>
+        </thead>
+        <tbody id="detail_rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div id="emailModal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div id="modalTitle" class="modal-title"></div>
+        <div id="modalSub" class="modal-sub"></div>
+      </div>
+      <button id="modalClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>الكود</th>
+            <th>المورد</th>
+            <th>القيمة</th>
+            <th>المنصرف</th>
+            <th>المتبقي</th>
+          </tr>
+        </thead>
+        <tbody id="modalRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script type="module" src="./src/email_analysis.js"></script>
 </body>
 </html>
