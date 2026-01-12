@@ -56,11 +56,7 @@
       font-weight: 800;
     }
 
-    .links{
-      display:flex;
-      gap:10px;
-      flex-wrap: wrap;
-    }
+    .links{ display:flex; gap:10px; flex-wrap: wrap; }
 
     a.btn{
       text-decoration:none;
@@ -108,7 +104,7 @@
       font-weight: 800;
       white-space: nowrap;
     }
-    select, button{
+    select, input, button{
       width: 100%;
       padding: 11px 12px;
       border: 1px solid rgba(255,255,255,0.14);
@@ -130,8 +126,9 @@
       display:flex;
       gap: 8px;
       align-items:flex-end;
-      height: 160px;
+      height: 170px;
       padding-top: 6px;
+      overflow:hidden;
     }
     .bar{
       flex: 1 1 0;
@@ -140,6 +137,10 @@
       border-radius: 10px;
       position: relative;
       min-width: 14px;
+    }
+    .bar.active{
+      outline: 2px solid rgba(233,236,246,0.55);
+      outline-offset: 2px;
     }
     .bar > span{
       position:absolute;
@@ -184,6 +185,29 @@
     .mono{
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
+
+    .split-top{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .split-top b{ color: var(--text); font-weight: 800; }
+
+    .chart-footer{
+      display:flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .chart-footer b{ color: var(--text); }
   </style>
 </head>
 
@@ -199,34 +223,32 @@
     <!-- KPIs -->
     <div class="grid kpi">
       <div class="card">
-        <div class="muted">إجمالي الإيميلات (Unique Time)</div>
+        <div class="muted">إجمالي الإيميلات</div>
         <div class="value" id="kpi_emails">—</div>
-        <div class="small">بعد تطبيق الفلاتر</div>
       </div>
 
       <div class="card">
-        <div class="muted">عدد الأيام</div>
-        <div class="value" id="kpi_days">—</div>
-        <div class="small">مبني على payment_request_date</div>
+        <div class="muted">إجمالي طلبات الصرف</div>
+        <div class="value" id="kpi_total_amount">—</div>
       </div>
 
       <div class="card">
-        <div class="muted">متوسط الإيميلات / يوم</div>
-        <div class="value" id="kpi_avg">—</div>
-        <div class="small">بعد تطبيق الفلاتر</div>
+        <div class="muted">إجمالي المصروف</div>
+        <div class="value" id="kpi_paid_amount">—</div>
       </div>
 
       <div class="card">
         <div class="muted">أعلى مشروع</div>
-        <div class="value" id="kpi_top_project">—</div>
-        <div class="small" id="kpi_top_project_hint">—</div>
+        <div class="split-top">
+          <div>بالعدد: <b id="kpi_top_count_project">—</b> (<span id="kpi_top_count_value">—</span>)</div>
+          <div>بالمصروف: <b id="kpi_top_paid_project">—</b> (<span id="kpi_top_paid_value">—</span>)</div>
+        </div>
       </div>
     </div>
 
     <!-- Filters -->
     <div class="card" style="margin-top:12px;">
       <div class="filters">
-
         <div class="filter-row">
           <label>القطاع:
             <select id="sector"></select>
@@ -236,33 +258,36 @@
             <select id="project"></select>
           </label>
 
-          <label>اليوم (payment_request_date):
-            <select id="day_key"></select>
+          <label>اليوم:
+            <input id="day_key" list="day_list" placeholder="اكتب يوم مثل 31..." />
+            <datalist id="day_list"></datalist>
           </label>
 
           <div class="btn-row">
             <button id="clearBtn">مسح</button>
-            <button id="exportBtn">تصدير CSV</button>
           </div>
         </div>
 
         <div class="small">
           <span id="meta">—</span>
         </div>
-
       </div>
     </div>
 
     <!-- Chart -->
     <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">عدد الإيميلات حسب اليوم (بعد الفلاتر)</div>
+      <div class="muted" style="font-weight:800;">قيمة طلبات الصرف (آخر 15 يوم)</div>
       <div class="chart" id="chart"></div>
-      <div class="small" style="margin-top:8px;">* كل عمود يمثل يوم (payment_request_date) — والعدد مبني على Unique Time</div>
+
+      <div class="chart-footer">
+        <div id="chart_hint">—</div>
+        <div id="selected_day_stats">—</div>
+      </div>
     </div>
 
     <!-- Summary table -->
     <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">ملخص يومي لكل مشروع</div>
+      <div class="muted" style="font-weight:800;">ملخص يومي لكل مشروع (عدد الإيميلات + القيمة)</div>
 
       <div class="table-wrap">
         <table>
@@ -272,6 +297,8 @@
               <th>القطاع</th>
               <th>المشروع</th>
               <th>عدد الإيميلات</th>
+              <th>قيمة طلبات الصرف</th>
+              <th>قيمة المصروف</th>
             </tr>
           </thead>
           <tbody id="summary_rows"></tbody>
@@ -281,7 +308,7 @@
 
     <!-- Drilldown -->
     <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">تفاصيل الإيميلات (Unique Time) بعد الفلاتر</div>
+      <div class="muted" style="font-weight:800;">تفاصيل الإيميلات بعد الفلاتر</div>
 
       <div class="table-wrap">
         <table>
@@ -291,6 +318,8 @@
               <th>القطاع</th>
               <th>المشروع</th>
               <th class="mono">Time</th>
+              <th>قيمة طلبات الصرف</th>
+              <th>قيمة المصروف</th>
             </tr>
           </thead>
           <tbody id="detail_rows"></tbody>
