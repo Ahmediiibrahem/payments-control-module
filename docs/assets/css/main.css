@@ -39,6 +39,7 @@ body{
   margin: 8px 0 14px;
   position: relative;
   z-index: 9999;
+  pointer-events: auto;
 }
 
 h1{
@@ -51,6 +52,9 @@ h1{
   display:flex;
   gap:10px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 10000;
+  pointer-events: auto;
 }
 
 a.btn{
@@ -61,6 +65,9 @@ a.btn{
   padding: 10px 12px;
   border-radius: 14px;
   font-weight: 800;
+  position: relative;
+  z-index: 10001;
+  pointer-events: auto;
 }
 a.btn:hover{ background: rgba(255,255,255,0.10); }
 
@@ -89,14 +96,12 @@ a.btn:hover{ background: rgba(255,255,255,0.10); }
 /* ===== Filters ===== */
 .filters{ display:grid; gap: 10px; margin-top: 12px; }
 
+/* ✅ بدل ما نحدد 5 أو 4 أعمدة لكل صفحة: auto-fit يظبط تلقائي */
 .filter-row{
   display:grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
   align-items:center;
-}
-@media (max-width: 900px){
-  .filter-row{ grid-template-columns: 1fr; }
 }
 
 label{
@@ -138,6 +143,68 @@ button:hover{ background: rgba(255,255,255,0.10); }
   padding:10px 14px;
 }
 
+/* ===== ✅ Chart (كان ناقص وده سبب المشكلة) ===== */
+.chart{
+  display:flex;
+  gap: 8px;
+  align-items:flex-end;
+  height: 170px;
+  padding-top: 6px;
+  overflow:hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.bar{
+  flex: 1 1 0;
+  background: rgba(255,255,255,0.10);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  position: relative;
+  min-width: 14px;
+}
+
+.bar.active{
+  outline: 2px solid rgba(233,236,246,0.55);
+  outline-offset: 2px;
+}
+
+.bar > span{
+  position:absolute;
+  bottom: -18px;
+  right: 0;
+  left: 0;
+  text-align:center;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow:hidden;
+  text-overflow: ellipsis;
+}
+
+.split-top{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.split-top b{ color: var(--text); font-weight: 800; }
+
+.chart-footer{
+  display:flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.chart-footer b{ color: var(--text); }
+
 /* ===== Tables ===== */
 .table-wrap{
   overflow:auto;
@@ -146,6 +213,8 @@ button:hover{ background: rgba(255,255,255,0.10); }
   border-radius: var(--radius);
   background:#0b1020;
   margin-top: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 table{ width:100%; border-collapse:collapse; }
