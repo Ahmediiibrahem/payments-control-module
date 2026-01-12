@@ -26,28 +26,30 @@ body{
   padding:18px;
 }
 
-/* ===== Topbar ===== */
+/* ===== Topbar (centered buttons above title) ===== */
 .topbar{
-  position:relative;
   margin-bottom:16px;
 }
+
 .nav-top{
   display:flex;
   gap:10px;
+  flex-wrap:wrap;
 }
-.nav-top .btn{
-  padding:8px 14px;
-  border-radius:14px;
-  border:1px solid var(--border);
-  background:rgba(255,255,255,.06);
-  color:var(--text);
-  font-weight:700;
-  text-decoration:none;
-}
-.nav-top .btn:hover{background:rgba(255,255,255,.12)}
 
+.nav-top.center{
+  justify-content:center;   /* ✅ في النص */
+  align-items:center;
+}
+
+.nav-top .nav-btn{
+  width: 190px;             /* ✅ نفس العرض */
+  text-align:center;
+}
+
+/* title spacing from buttons */
 .page-title{
-  margin-top:12px;
+  margin-top:14px;          /* ✅ ينزل شوية عن الأزرار */
   text-align:center;
   font-size:26px;
   font-weight:800;
