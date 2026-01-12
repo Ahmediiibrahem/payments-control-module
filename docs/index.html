@@ -3,39 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cash Control Dashboard</title>
+  <title>Cash Control Dashboard – مطالبات المشاريع</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+
   <link rel="icon" type="image/png" href="./assets/favicon.png">
   <link rel="stylesheet" href="./assets/css/main.css">
 
   <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-GCPTV6MHRT');
-</script>
-  
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-GCPTV6MHRT');
+  </script>
 </head>
 
 <body>
   <div class="container">
 
-    <!-- ✅ Unified Topbar: Title center + button top-left -->
-   <div class="topbar">
-  <div class="nav-top">
-    <a class="btn" href="./index.html">Cash Control Dashboard</a>
-    <a class="btn" href="./email-analysis.html">E-Mails Analysis</a>
-  </div>
+    <!-- ✅ Unified Topbar: Buttons ABOVE title -->
+    <div class="topbar">
+      <div class="nav-top">
+        <a class="btn" href="./index.html">Cash Control Dashboard</a>
+        <a class="btn" href="./email-analysis.html">E-Mails Analysis</a>
+      </div>
 
-  <h1 class="page-title">Cash Control Dashboard</h1>
-</div>
-
+      <h1 class="page-title">Cash Control Dashboard – مطالبات المشاريع</h1>
+    </div>
 
     <!-- ✅ KPIs (IDs EXACTLY as app.js expects) -->
     <div class="grid kpi">
@@ -113,7 +111,7 @@
           <span id="meta">—</span>
         </div>
 
-        <!-- ✅ Data Quality IDs exist (app.js writes here) -->
+        <!-- ✅ Data Quality -->
         <div class="small" style="display:flex;gap:14px;flex-wrap:wrap; margin-top:8px;">
           <span>إجمالي الصفوف: <b id="dq_total">—</b></span>
           <span>بدون مورد: <b id="dq_excluded_vendor">—</b></span>
