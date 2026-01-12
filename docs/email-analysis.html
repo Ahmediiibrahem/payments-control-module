@@ -3,47 +3,51 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تحليل الطلبات المرفوعة على الميل</title>
+  <title>E-Mails Analysis</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="./assets/css/main.css">
-
-
 </head>
 
 <body>
   <div class="container">
+
+    <!-- ✅ Unified Topbar -->
     <div class="topbar">
-      <h1>E-Mails Analysis</h1>
-      <div class="links">
-        <a class="btn" href="./index.html">Control Dashboard</a>
+      <div class="nav-left">
+        <a class="btn" href="./index.html">Cash Control Dashboard</a>
       </div>
+
+      <h1 class="page-title">E-Mails Analysis</h1>
+
+      <div class="nav-spacer"></div>
     </div>
 
-    <!-- KPIs -->
+    <!-- ✅ Unified KPI cards -->
     <div class="grid kpi">
-      <div class="card">
-        <div class="muted">إجمالي الإيميلات</div>
-        <div class="value" id="kpi_emails">—</div>
+      <div class="card kpi-card">
+        <div class="kpi-label">إجمالي الإيميلات</div>
+        <div class="kpi-value" id="kpi_emails">—</div>
       </div>
 
-      <div class="card">
-        <div class="muted">إجمالي طلبات الصرف</div>
-        <div class="value" id="kpi_total_amount">—</div>
+      <div class="card kpi-card">
+        <div class="kpi-label">إجمالي طلبات الصرف</div>
+        <div class="kpi-value" id="kpi_total_amount">—</div>
       </div>
 
-      <div class="card">
-        <div class="muted">إجمالي المصروف</div>
-        <div class="value" id="kpi_paid_amount">—</div>
+      <div class="card kpi-card">
+        <div class="kpi-label">إجمالي المصروف</div>
+        <div class="kpi-value" id="kpi_paid_amount">—</div>
       </div>
 
-      <div class="card">
-        <div class="muted">أعلى مشروع</div>
-        <div class="split-top">
-          <div>بالعدد: <b id="kpi_top_count_project">—</b> (<span id="kpi_top_count_value">—</span>)</div>
-          <div>بالمصروف: <b id="kpi_top_paid_project">—</b> (<span id="kpi_top_paid_value">—</span>)</div>
+      <div class="card kpi-card">
+        <div class="kpi-label">أعلى مشروع</div>
+        <div class="kpi-sub">
+          بالعدد: <b id="kpi_top_count_project">—</b> (<span id="kpi_top_count_value">—</span>)<br>
+          بالمصروف: <b id="kpi_top_paid_project">—</b> (<span id="kpi_top_paid_value">—</span>)
         </div>
       </div>
     </div>
@@ -78,7 +82,7 @@
 
     <!-- Chart -->
     <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">قيمة طلبات الصرف (آخر 15 يوم)</div>
+      <div class="muted">قيمة طلبات الصرف (آخر 15 يوم)</div>
       <div class="chart" id="chart"></div>
 
       <div class="chart-footer">
@@ -89,7 +93,7 @@
 
     <!-- Summary table -->
     <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">ملخص يومي لكل مشروع (عدد الإيميلات + القيمة)</div>
+      <div class="muted">ملخص يومي لكل مشروع (عدد الإيميلات + القيمة)</div>
 
       <div class="table-wrap">
         <table>
@@ -110,7 +114,7 @@
 
     <!-- Drilldown -->
     <div class="card" style="margin-top:12px;">
-      <div class="muted" style="font-weight:800;">تفاصيل الإيميلات بعد الفلاتر</div>
+      <div class="muted">تفاصيل الإيميلات بعد الفلاتر</div>
 
       <div class="table-wrap">
         <table>
