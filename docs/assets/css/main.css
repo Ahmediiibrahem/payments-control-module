@@ -1,15 +1,12 @@
 :root{
   --bg:#0b1020;
-  --bg2:#0f1630;
   --card:#121c37;
   --card2:#0f1933;
   --border:rgba(255,255,255,.12);
   --text:#e9ecf6;
   --muted:rgba(233,236,246,.65);
-  --accent:#6ea8fe;
 }
 
-/* ========== RESET ========== */
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
@@ -20,75 +17,57 @@ body{
     var(--bg);
   color:var(--text);
 }
-
 a{color:inherit;text-decoration:none}
 
-/* ========== LAYOUT ========== */
-.container{
-  max-width:1280px;
-  margin:0 auto;
-  padding:18px;
-}
+.container{max-width:1280px;margin:0 auto;padding:18px}
 
-/* ========== TOPBAR ========== */
-.topbar{
-  margin-bottom:16px;
-}
+/* ===== TOPBAR ===== */
+.topbar{margin-bottom:16px}
 
-/* 🔒 NAV BUTTONS – FINAL & FIXED */
-.topbar .nav-top.nav-fixed{
+/* ✅ الزرين: وسط، سطر واحد، نفس المقاس */
+.nav-top.nav-fixed{
   display:flex;
   justify-content:center;
   align-items:center;
   gap:12px;
-  flex-wrap:nowrap;          /* سطر واحد فقط */
+  flex-wrap:nowrap;
   white-space:nowrap;
   margin-bottom:14px;
 }
 
-.topbar .nav-top.nav-fixed .nav-btn{
+.nav-top.nav-fixed .nav-btn{
   display:inline-flex;
   justify-content:center;
   align-items:center;
-
-  width:230px;               /* على قد أطول جملة */
+  width:230px;     /* نفس مقاس أكبر جملة */
   height:42px;
-
   padding:0 14px;
+
   border-radius:14px;
   border:1px solid var(--border);
   background:rgba(255,255,255,.06);
 
-  color:var(--text);
+  color:rgba(233,236,246,.95);
   font-weight:800;
   font-size:14px;
   line-height:1;
 }
 
-.topbar .nav-top.nav-fixed .nav-btn:hover{
+.nav-top.nav-fixed .nav-btn:hover{
   background:rgba(255,255,255,.12);
 }
 
 .page-title{
-  margin-top:6px;
+  margin:0;
   text-align:center;
   font-size:26px;
   font-weight:800;
 }
 
-/* ========== GRID & CARDS ========== */
-.grid{
-  display:grid;
-  gap:12px;
-}
-
-.grid.kpi{
-  grid-template-columns:repeat(4,1fr);
-}
-
-@media(max-width:900px){
-  .grid.kpi{grid-template-columns:repeat(2,1fr)}
-}
+/* ===== GRID/CARDS ===== */
+.grid{display:grid;gap:12px}
+.grid.kpi{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.grid.kpi{grid-template-columns:repeat(2,1fr)}}
 
 .card{
   background:linear-gradient(180deg,var(--card),var(--card2));
@@ -96,254 +75,86 @@ a{color:inherit;text-decoration:none}
   border-radius:18px;
   padding:14px;
 }
+.kpi-card{text-align:center}
+.kpi-label{font-size:13px;color:var(--muted);font-weight:700}
+.kpi-value{font-size:22px;font-weight:800;margin-top:4px}
+.kpi-sub{font-size:12px;color:var(--muted);margin-top:2px}
 
-.kpi-card{
-  text-align:center;
-}
-
-.kpi-label{
-  font-size:13px;
-  color:var(--muted);
-  font-weight:700;
-}
-
-.kpi-value{
-  font-size:22px;
-  font-weight:800;
-  margin-top:4px;
-}
-
-.kpi-sub{
-  font-size:12px;
-  color:var(--muted);
-  margin-top:2px;
-}
-
-/* ========== FILTERS ========== */
+/* ===== FILTERS ===== */
 .filters label{
-  font-size:12px;
-  font-weight:700;
-  color:var(--muted);
-  display:flex;
-  flex-direction:column;
-  gap:4px;
+  font-size:12px;font-weight:700;color:var(--muted);
+  display:flex;flex-direction:column;gap:4px
 }
-
-.filters select,
-.filters input{
-  background:#0b132b;
-  color:var(--text);
+.filters select,.filters input{
+  background:#0b132b;color:var(--text);
   border:1px solid var(--border);
-  border-radius:10px;
-  padding:6px 8px;
+  border-radius:10px;padding:6px 8px
 }
-
-.filter-row{
-  display:flex;
-  gap:12px;
-  flex-wrap:wrap;
-  margin-bottom:10px;
-}
-
+.filter-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
 .btn-row button{
-  padding:7px 14px;
-  border-radius:12px;
-  border:1px solid var(--border);
-  background:rgba(255,255,255,.06);
-  color:var(--text);
-  font-weight:800;
-  cursor:pointer;
+  padding:7px 14px;border-radius:12px;border:1px solid var(--border);
+  background:rgba(255,255,255,.06);color:var(--text);
+  font-weight:800;cursor:pointer
 }
-
-.btn-row button:hover{
-  background:rgba(255,255,255,.14);
-}
-
+.btn-row button:hover{background:rgba(255,255,255,.14)}
 .small{font-size:12px;color:var(--muted)}
 .muted{color:var(--muted)}
 .mono{font-family:ui-monospace,Menlo,monospace}
 
-/* ========== TABLES ========== */
+/* ===== TABLES ===== */
 .table-wrap{overflow:auto}
-
-table{
-  width:100%;
-  border-collapse:collapse;
-}
-
-thead th{
-  position:sticky;
-  top:0;
-  background:#0e1733;
-  z-index:2;
-}
-
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;background:#0e1733;z-index:2}
 th,td{
-  padding:8px 10px;
-  border-bottom:1px solid var(--border);
-  font-size:13px;
-  white-space:nowrap;
+  padding:8px 10px;border-bottom:1px solid var(--border);
+  font-size:13px;white-space:nowrap
 }
-
-tbody tr:hover{
-  background:rgba(255,255,255,.06);
-}
-
+tbody tr:hover{background:rgba(255,255,255,.06)}
 .clickable-row{cursor:pointer}
 
-/* ========== CHART ========== */
-.chart{
-  display:flex;
-  gap:10px;
-  align-items:flex-end;
-  height:220px;
-}
-
-.chart-group{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-
-.chart-bars{
-  height:175px;
-  display:flex;
-  align-items:flex-end;
-}
-
+/* ===== CHART ===== */
+.chart{display:flex;gap:10px;align-items:flex-end;height:220px}
+.chart-group{flex:1;display:flex;flex-direction:column;gap:6px}
+.chart-bars{height:175px;display:flex;align-items:flex-end}
 .bar-stack{
-  width:100%;
-  height:100%;
+  width:100%;height:100%;
   background:rgba(255,255,255,.10);
   border:1px solid var(--border);
-  border-radius:12px;
-  overflow:hidden;
-  position:relative;
-  display:flex;
-  flex-direction:column;
-  justify-content:flex-end;
+  border-radius:12px;overflow:hidden;
+  position:relative;display:flex;flex-direction:column;justify-content:flex-end
 }
-
-.bar-paid{
-  background:rgba(255,255,255,.28);
-  position:relative;
-}
-
+.bar-paid{background:rgba(255,255,255,.28);position:relative}
 .bar-top-value{
-  position:absolute;
-  top:-18px;
-  width:100%;
-  text-align:center;
-  font-size:11px;
-  font-weight:800;
+  position:absolute;top:-18px;width:100%;
+  text-align:center;font-size:11px;font-weight:800
 }
-
 .bar-percent{
-  position:absolute;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:12px;
-  font-weight:800;
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800
 }
+.chart-day{text-align:center;font-size:11px;color:var(--muted);font-weight:800}
 
-.chart-day{
-  text-align:center;
-  font-size:11px;
-  color:var(--muted);
-  font-weight:800;
-}
-
-/* ========== MODAL ========== */
+/* ===== MODAL ===== */
 .modal-backdrop{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.6);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:9999;
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  display:none;align-items:center;justify-content:center;z-index:9999
 }
-
 .modal-backdrop.show{display:flex}
-
 .modal{
   width:min(900px,100%);
   background:linear-gradient(180deg,var(--card),var(--card2));
   border:1px solid var(--border);
   border-radius:18px;
 }
-
 .modal-head{
-  display:flex;
-  justify-content:space-between;
-  padding:12px 14px;
-  border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;
+  padding:12px 14px;border-bottom:1px solid var(--border)
 }
-
 .modal-title{font-weight:800}
 .modal-sub{font-size:12px;color:var(--muted)}
-
 .modal-close{
-  background:none;
-  border:1px solid var(--border);
-  border-radius:10px;
-  color:var(--text);
-  font-weight:800;
-  cursor:pointer;
+  background:none;border:1px solid var(--border);
+  border-radius:10px;color:var(--text);
+  font-weight:800;cursor:pointer
 }
-
 .modal-body{padding:14px}
-
-/* ===== HARD FIX: NAV LINKS ALWAYS LOOK LIKE BUTTONS ===== */
-.topbar{
-  margin-bottom:16px;
-}
-
-/* خلي أي لينكات داخل الـ topbar شكلها button */
-.topbar a{
-  text-decoration:none !important;
-  color:rgba(233,236,246,.95) !important;
-}
-
-/* لو عندك wrapper للأزرار (حتى لو اسمه nav-top أو أي حاجة) */
-.topbar > div:first-child{
-  display:flex !important;
-  justify-content:center !important;
-  align-items:center !important;
-  gap:12px !important;
-  flex-wrap:nowrap !important;     /* سطر واحد */
-  white-space:nowrap !important;
-  margin-bottom:14px !important;
-}
-
-/* الزرارين نفس المقاس */
-.topbar > div:first-child a{
-  display:inline-flex !important;
-  justify-content:center !important;
-  align-items:center !important;
-
-  width:230px !important;
-  height:42px !important;
-
-  padding:0 14px !important;
-  border-radius:14px !important;
-  border:1px solid rgba(255,255,255,.12) !important;
-  background:rgba(255,255,255,.06) !important;
-
-  font-weight:800 !important;
-  line-height:1 !important;
-}
-
-/* hover */
-.topbar > div:first-child a:hover{
-  background:rgba(255,255,255,.12) !important;
-}
-
-/* العنوان ينزل عنهم */
-.topbar .page-title{
-  margin-top:6px !important;
-  text-align:center !important;
-}
