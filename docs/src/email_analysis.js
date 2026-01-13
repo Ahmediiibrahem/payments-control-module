@@ -268,63 +268,181 @@ function filterGroups(groups){
 }
 
 // ============================
-// Chart (آخر 15 يوم)
+// Day Modal (Click on chart bar)
+// ============================
+function escHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[ch]));
+}
+
+function ensureDayModal(){
+  let modal = document.getElementById("dayModal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "dayModal";
+  modal.className = "modal-backdrop";
+  modal.setAttribute("aria-hidden","true");
+
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div id="dayModalTitle" class="modal-title">—</div>
+          <div id="dayModalSub" class="modal-sub">—</div>
+        </div>
+        <button id="dayModalClose" class="modal-close" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>المشروع</th>
+                <th>قيمة طلب الصرف</th>
+                <th>المصروف</th>
+                <th class="mono">Time</th>
+              </tr>
+            </thead>
+            <tbody id="dayModalRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function openDayModal(dayLabelStr, groupsScope){
+  const modal = ensureDayModal();
+  const title = document.getElementById("dayModalTitle");
+  const sub = document.getElementById("dayModalSub");
+  const tbody = document.getElementById("dayModalRows");
+
+  const items = (groupsScope || []).filter(g => g.day === dayLabelStr && g.total > 0);
+
+  title.textContent = `إيميلات يوم: ${dayLabelStr}`;
+  sub.textContent = items.length
+    ? `عدد الإيميلات: ${items.length} | إجمالي طلبات الصرف: ${fmtMoney(items.reduce((a,x)=>a+x.total,0))}`
+    : `لا توجد إيميلات في هذا اليوم`;
+
+  tbody.innerHTML = items
+    .sort((a,b)=> (b.total - a.total))
+    .map(g=>`
+      <tr>
+        <td>${escHtml(g.project || "(بدون مشروع)")}</td>
+        <td>${fmtMoney(g.total)}</td>
+        <td>${fmtMoney(g.paid)}</td>
+        <td class="mono">${escHtml(g.time)}</td>
+      </tr>
+    `).join("");
+
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden","false");
+
+  const close = ()=>{
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden","true");
+    document.getElementById("dayModalClose").removeEventListener("click", close);
+    modal.removeEventListener("click", onBackdrop);
+    document.removeEventListener("keydown", onEsc);
+  };
+  const onBackdrop = (e)=>{ if(e.target===modal) close(); };
+  const onEsc = (e)=>{ if(e.key==="Escape") close(); };
+
+  document.getElementById("dayModalClose").addEventListener("click", close);
+  modal.addEventListener("click", onBackdrop);
+  document.addEventListener("keydown", onEsc);
+}
+
+// ============================
+// Chart (آخر 15 يوم فعليين)
+// - آخر يوم = آخر تاريخ ظهر فيه مطالبة
+// - الأيام اللي فيها مطالبات: ارتفاع ثابت 100%
+// - الأيام الفاضية: صفر
+// - النسبة (Paid%) هي اللي بتختلف
+// - Click على العمود يفتح Day Modal (مش تفاصيل)
 // ============================
 function renderChart(groupsNoDay){
   const chart = $("chart");
-  if (!groupsNoDay.length){
-    chart.innerHTML = "";
-    return;
-  }
+  chart.innerHTML = "";
 
-  const maxDate = groupsNoDay.reduce((m,g)=>Math.max(m,g.date.getTime()), 0);
-  const end = new Date(maxDate);
+  const valid = (groupsNoDay || []).filter(g => g?.date instanceof Date && !isNaN(g.date.getTime()));
+  if (!valid.length) return;
+
+  // end = آخر يوم فعلي (UTC day)
+  const maxMs = valid.reduce((m,g)=>Math.max(m,g.date.getTime()), 0);
+  const end = new Date(maxMs);
+
+  // start = 14 يوم قبل end => 15 يوم
   const start = new Date(end.getTime() - 14*24*60*60*1000);
 
+  // Build 15 days list (UTC day-by-day)
   const days = [];
+  const base = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
   for(let i=0;i<15;i++){
-    const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+    const d = new Date(base.getTime());
     d.setUTCDate(d.getUTCDate()+i);
     days.push(d);
   }
 
+  // Aggregate by day
   const agg = new Map();
-  days.forEach(d=> agg.set(dayLabel(d), {total:0, paid:0}));
-
-  groupsNoDay.forEach(g=>{
+  days.forEach(d => agg.set(dayLabel(d), { total: 0, paid: 0 }));
+  valid.forEach(g=>{
     if (agg.has(g.day)){
       const a = agg.get(g.day);
       a.total += g.total;
-      a.paid += g.paid;
+      a.paid  += g.paid;
     }
   });
 
-  const maxTotal = Math.max(...Array.from(agg.values()).map(x=>x.total), 1);
-
   chart.innerHTML = days.map(d=>{
     const dl = dayLabel(d);
-    const a = agg.get(dl);
-    const hTotal = (a.total / maxTotal) * 100;
-    const pct = a.total > 0 ? Math.round((a.paid / a.total) * 100) : 0;
+    const a = agg.get(dl) || { total:0, paid:0 };
+
+    const has = a.total > 0;
+    const pct = has ? Math.round((a.paid / a.total) * 100) : 0;
+
+    // ✅ fixed height if has emails, else 0
+    const stackHeight = has ? 100 : 0;
+
+    // ✅ visibility for small pct (min-height)
+    const paidExtraStyle = (has && pct > 0 && pct < 10) ? "min-height:18px;" : "";
 
     return `
-      <div class="chart-group">
-        <div class="chart-bars">
-          <div class="bar-stack" style="height:${hTotal}%;">
-            <div class="bar-top-value">${a.total>0 ? fmtMoney(a.total) : ""}</div>
-            <div class="bar-paid" style="height:${pct}%;">
-              <div class="bar-percent">${a.total>0 ? (pct+"%") : ""}</div>
-            </div>
+      <div class="chart-group" data-day="${dl}">
+        <div class="chart-bars" title="${has ? `Total: ${fmtMoney(a.total)} | Paid: ${fmtMoney(a.paid)} | ${pct}%` : "No emails"}">
+          <div class="bar-stack" style="height:${stackHeight}%;">
+            <div class="bar-top-value">${has ? fmtMoney(a.total) : ""}</div>
+
+            ${has ? `
+              <div class="bar-paid" style="height:${pct}%; ${paidExtraStyle}">
+                <div class="bar-percent">${pct}%</div>
+              </div>
+            ` : ``}
           </div>
         </div>
         <div class="chart-day">${dl}</div>
       </div>
     `;
   }).join("");
+
+  // ✅ Click on bar => list emails (project + value)
+  chart.querySelectorAll(".chart-group").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const day = el.getAttribute("data-day");
+      openDayModal(day, valid); // valid already respects sector/project filters (because we pass groupsNoDay filtered)
+    });
+  });
 }
 
 // ============================
-// Modal
+// Modal (Details of a group)
 // ============================
 function openModal(group){
   const modal = $("emailModal");
@@ -374,24 +492,18 @@ function render(){
   $("kpi_total_amount").textContent = fmtMoney(groups.reduce((a,g)=>a+g.total,0));
   $("kpi_paid_amount").textContent = fmtMoney(groups.reduce((a,g)=>a+g.paid,0));
 
-  // Debug Meta
-  const total = data.length;
-  const withVendor = data.filter(r=>r.vendor).length;
-  const withTime = data.filter(r=>r.time).length;
-  const withDate = data.filter(r=>r._emailDate).length;
-
+  // Meta
   const sectorText = $("sector").selectedOptions[0]?.textContent || "الكل";
   const projectText = $("project").value || "الكل";
   const dayText = normText($("day_key").value) || "الكل";
-
-$("meta").textContent =
-  `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText}`;
+  $("meta").textContent =
+    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText}`;
 
   // day datalist
   const daySet = uniqSorted(groupsAll.map(g=>g.day));
   $("day_list").innerHTML = daySet.map(d=>`<option value="${d}"></option>`).join("");
 
-  // chart ignoring day filter
+  // chart ignoring day filter (بس ملتزم بفلتر القطاع/المشروع)
   const sectorKey = $("sector").value;
   const projKey = normText($("project").value);
   const groupsNoDay = groupsAll.filter(g=>{
