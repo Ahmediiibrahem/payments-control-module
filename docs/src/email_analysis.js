@@ -48,7 +48,7 @@ function normalizeHeaderKey(h) {
     .trim();
 }
 
-// ✅ أقوى Parser للتاريخ (يدعم وقت / - / / / ترتيب يوم-شهر-سنة)
+// ✅ Parser للتاريخ (يدعم وقت / - / / / ترتيب يوم-شهر-سنة)
 function parseDateSmart(s) {
   let t = normText(s);
   if (!t || t === "-" || t === "0") return null;
@@ -113,17 +113,34 @@ function parseCSV(text) {
   return res.data || [];
 }
 
-// ✅ الحل: اقرأ Time من RAW مباشرة (قبل أي Mapping)
-// يقبل Time / TIME / Time_1 / Time (بمسافة) ... إلخ
+// ============================
+// Pick Exacttime from RAW
+// ============================
+function pickExactTimeFromRaw(raw){
+  for (const k of Object.keys(raw || {})) {
+    const keyNorm = normalizeHeaderKey(k).toLowerCase();
+    // Google ممكن يعمل Exacttime_1 لو فيه تكرار
+    if (keyNorm === "exacttime" || keyNorm.startsWith("exacttime")) {
+      const v = normText(raw[k]);
+      if (v) return v;
+    }
+    // احتياط لو اتسمّى exact_time
+    if (keyNorm === "exact_time" || keyNorm.startsWith("exact_time")) {
+      const v = normText(raw[k]);
+      if (v) return v;
+    }
+  }
+  return "";
+}
+
+// (Old fallback) لو حد لسه عنده عمود Time القديم
 function pickTimeFromRaw(raw){
   for (const k of Object.keys(raw || {})) {
     const keyNorm = normalizeHeaderKey(k).toLowerCase();
-    // Google ممكن يعمل Time_1 لو فيه تكرار
     if (keyNorm === "time" || keyNorm.startsWith("time")) {
       const v = normText(raw[k]);
       if (v) return v;
     }
-    // احتياط لو حد سماه عربي
     if (keyNorm === "الوقت" || keyNorm === "تايم") {
       const v = normText(raw[k]);
       if (v) return v;
@@ -154,14 +171,19 @@ function normalizeRow(raw) {
 
   const vendor = normalizeVendor(row.vendor);
 
-  // ✅ Time من RAW (مش من mapped row)
-  const timeVal = pickTimeFromRaw(raw);
+  // ✅ Time: prefer Exacttime (human), fallback to old Time if needed
+  const exactTimeVal = pickExactTimeFromRaw(raw) || normText(row.exact_time);
+  const oldTimeVal = pickTimeFromRaw(raw);
+  const timeVal = exactTimeVal || oldTimeVal || "";
 
-  // تاريخ الإيميل
+  // ✅ التاريخ: نفضّل تاريخ الطلب (الصرف)
   const payStr = normText(row.payment_request_date);
   const srcStr = normText(row.source_request_date);
+
   const dPay = parseDateSmart(payStr);
   const dSrc = parseDateSmart(srcStr);
+
+  // المطلوب: التاريخ من تاريخ الصرف (ولو فاضي نرجع للمصدر كـ fallback عشان منخسرش داتا)
   const emailDate = dPay || dSrc || null;
 
   return {
@@ -220,6 +242,7 @@ function rebuildProjectDropdownForSector() {
 // Emails logic
 // ============================
 function rowsEmailsOnly(rows){
+  // لازم Vendor + Time + Date
   return rows.filter(r => r.vendor && r.time && r._emailDate);
 }
 
@@ -303,7 +326,7 @@ function ensureDayModal(){
                 <th>المشروع</th>
                 <th>قيمة طلب الصرف</th>
                 <th>المصروف</th>
-                <th class="mono">Time</th>
+                <th>الوقت</th>
               </tr>
             </thead>
             <tbody id="dayModalRows"></tbody>
@@ -337,7 +360,7 @@ function openDayModal(dayLabelStr, groupsScope){
         <td>${escHtml(g.project || "(بدون مشروع)")}</td>
         <td>${fmtMoney(g.total)}</td>
         <td>${fmtMoney(g.paid)}</td>
-        <td class="mono">${escHtml(g.time)}</td>
+        <td>${escHtml(g.time)}</td>
       </tr>
     `).join("");
 
@@ -361,11 +384,6 @@ function openDayModal(dayLabelStr, groupsScope){
 
 // ============================
 // Chart (آخر 15 يوم فعليين)
-// - آخر يوم = آخر تاريخ ظهر فيه مطالبة
-// - الأيام اللي فيها مطالبات: ارتفاع ثابت 100%
-// - الأيام الفاضية: صفر
-// - النسبة (Paid%) هي اللي بتختلف
-// - Click على العمود يفتح Day Modal (مش تفاصيل)
 // ============================
 function renderChart(groupsNoDay){
   const chart = $("chart");
@@ -374,14 +392,10 @@ function renderChart(groupsNoDay){
   const valid = (groupsNoDay || []).filter(g => g?.date instanceof Date && !isNaN(g.date.getTime()));
   if (!valid.length) return;
 
-  // end = آخر يوم فعلي (UTC day)
   const maxMs = valid.reduce((m,g)=>Math.max(m,g.date.getTime()), 0);
   const end = new Date(maxMs);
-
-  // start = 14 يوم قبل end => 15 يوم
   const start = new Date(end.getTime() - 14*24*60*60*1000);
 
-  // Build 15 days list (UTC day-by-day)
   const days = [];
   const base = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
   for(let i=0;i<15;i++){
@@ -390,7 +404,6 @@ function renderChart(groupsNoDay){
     days.push(d);
   }
 
-  // Aggregate by day
   const agg = new Map();
   days.forEach(d => agg.set(dayLabel(d), { total: 0, paid: 0 }));
   valid.forEach(g=>{
@@ -408,10 +421,7 @@ function renderChart(groupsNoDay){
     const has = a.total > 0;
     const pct = has ? Math.round((a.paid / a.total) * 100) : 0;
 
-    // ✅ fixed height if has emails, else 0
     const stackHeight = has ? 100 : 0;
-
-    // ✅ visibility for small pct (min-height)
     const paidExtraStyle = (has && pct > 0 && pct < 10) ? "min-height:18px;" : "";
 
     return `
@@ -432,11 +442,10 @@ function renderChart(groupsNoDay){
     `;
   }).join("");
 
-  // ✅ Click on bar => list emails (project + value)
   chart.querySelectorAll(".chart-group").forEach(el=>{
     el.addEventListener("click", ()=>{
       const day = el.getAttribute("data-day");
-      openDayModal(day, valid); // valid already respects sector/project filters (because we pass groupsNoDay filtered)
+      openDayModal(day, valid);
     });
   });
 }
@@ -448,7 +457,7 @@ function openModal(group){
   const modal = $("emailModal");
   $("modalTitle").textContent = `${group.sector} — ${group.project}`;
   $("modalSub").textContent =
-    `اليوم: ${group.day} | Time: ${group.time} | إجمالي: ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)}`;
+    `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي: ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)}`;
 
   const rows = [...group.rows];
   $("modalRows").innerHTML = rows.map((r,idx)=>`
@@ -492,14 +501,12 @@ function render(){
   $("kpi_total_amount").textContent = fmtMoney(groups.reduce((a,g)=>a+g.total,0));
   $("kpi_paid_amount").textContent = fmtMoney(groups.reduce((a,g)=>a+g.paid,0));
 
-  // Meta
   const sectorText = $("sector").selectedOptions[0]?.textContent || "الكل";
   const projectText = $("project").value || "الكل";
   const dayText = normText($("day_key").value) || "الكل";
   $("meta").textContent =
     `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText}`;
 
-  // day datalist
   const daySet = uniqSorted(groupsAll.map(g=>g.day));
   $("day_list").innerHTML = daySet.map(d=>`<option value="${d}"></option>`).join("");
 
@@ -520,7 +527,7 @@ function render(){
       <td>${g.day}</td>
       <td>${g.sector}</td>
       <td>${g.project}</td>
-      <td class="mono">${g.time}</td>
+      <td>${g.time}</td>
       <td>${fmtMoney(g.total)}</td>
       <td>${fmtMoney(g.paid)}</td>
     </tr>
@@ -548,7 +555,6 @@ async function init(){
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
-  // sector->projects
   projectsBySector = new Map();
   data.forEach(r=>{
     if (!r.projectKey) return;
@@ -556,7 +562,6 @@ async function init(){
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
-  // dropdowns
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = $("sector");
   sectorSel.innerHTML =
