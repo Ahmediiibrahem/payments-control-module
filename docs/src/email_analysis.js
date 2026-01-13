@@ -82,9 +82,8 @@ function parseDateSmart(s) {
   m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
   if (m) {
     const a = +m[1], b = +m[2], y = +m[3];
-    // decide which is month
     let mm = a, dd = b;
-    if (a > 12) { dd = a; mm = b; } // if first > 12 then it's day
+    if (a > 12) { dd = a; mm = b; }
     const d = new Date(Date.UTC(y, mm - 1, dd));
     return isNaN(d.getTime()) ? null : d;
   }
@@ -114,17 +113,19 @@ function parseCSV(text) {
   return res.data || [];
 }
 
-// ✅ قراءة Time حتى لو الاسم مختلف (Time / TIME / Time  / time ...)
-function pickTimeField(rowObj){
-  // after mapping keys, try common variants
-  const candidates = ["Time","TIME","time","Time ","TIME ","time "];
-  for (const k of candidates){
-    if (k in rowObj && normText(rowObj[k])) return normText(rowObj[k]);
-  }
-  // fallback: search any key that equals "time" ignoring case/spaces
-  for (const k of Object.keys(rowObj)){
-    if (normalizeHeaderKey(k).toLowerCase() === "time"){
-      const v = normText(rowObj[k]);
+// ✅ الحل: اقرأ Time من RAW مباشرة (قبل أي Mapping)
+// يقبل Time / TIME / Time_1 / Time (بمسافة) ... إلخ
+function pickTimeFromRaw(raw){
+  for (const k of Object.keys(raw || {})) {
+    const keyNorm = normalizeHeaderKey(k).toLowerCase();
+    // Google ممكن يعمل Time_1 لو فيه تكرار
+    if (keyNorm === "time" || keyNorm.startsWith("time")) {
+      const v = normText(raw[k]);
+      if (v) return v;
+    }
+    // احتياط لو حد سماه عربي
+    if (keyNorm === "الوقت" || keyNorm === "تايم") {
+      const v = normText(raw[k]);
       if (v) return v;
     }
   }
@@ -139,7 +140,7 @@ function normalizeRow(raw) {
 
   Object.entries(raw).forEach(([key, value]) => {
     const kNorm = normalizeHeaderKey(key);
-    const mapped = HEADER_MAP[kNorm] || kNorm; // pass-through english
+    const mapped = HEADER_MAP[kNorm] || kNorm;
     row[mapped] = value;
   });
 
@@ -152,14 +153,15 @@ function normalizeRow(raw) {
   if (projectKey) projectLabelByKey.set(projectKey, projectLabel);
 
   const vendor = normalizeVendor(row.vendor);
-  const timeVal = pickTimeField(row);
 
-  // ✅ تاريخ الإيميل = payment_request_date (ولو فاضي نجرّب source_request_date كفولباك)
+  // ✅ Time من RAW (مش من mapped row)
+  const timeVal = pickTimeFromRaw(raw);
+
+  // تاريخ الإيميل
   const payStr = normText(row.payment_request_date);
   const srcStr = normText(row.source_request_date);
   const dPay = parseDateSmart(payStr);
   const dSrc = parseDateSmart(srcStr);
-
   const emailDate = dPay || dSrc || null;
 
   return {
@@ -218,12 +220,10 @@ function rebuildProjectDropdownForSector() {
 // Emails logic
 // ============================
 function rowsEmailsOnly(rows){
-  // ✅ Emails rows: vendor موجود + time موجود + تاريخ صالح
   return rows.filter(r => r.vendor && r.time && r._emailDate);
 }
 
 function groupEmails(rows){
-  // group by sector|project|time|day
   const map = new Map();
 
   rows.forEach(r => {
@@ -370,50 +370,28 @@ function render(){
   const groupsAll = groupEmails(emailRows);
   const groups = filterGroups(groupsAll);
 
-  // KPIs
   $("kpi_emails").textContent = fmtMoney(groups.length);
   $("kpi_total_amount").textContent = fmtMoney(groups.reduce((a,g)=>a+g.total,0));
   $("kpi_paid_amount").textContent = fmtMoney(groups.reduce((a,g)=>a+g.paid,0));
 
-  // Top projects
-  const byCount = new Map();
-  const byPaid = new Map();
-  groups.forEach(g=>{
-    const p = g.project || "(بدون مشروع)";
-    byCount.set(p,(byCount.get(p)||0)+1);
-    byPaid.set(p,(byPaid.get(p)||0)+g.paid);
-  });
-
-  let topCountP="—", topCountV=0;
-  byCount.forEach((v,k)=>{ if(v>topCountV){topCountV=v; topCountP=k;} });
-
-  let topPaidP="—", topPaidV=0;
-  byPaid.forEach((v,k)=>{ if(v>topPaidV){topPaidV=v; topPaidP=k;} });
-
-  $("kpi_top_count_project").textContent = topCountP;
-  $("kpi_top_count_value").textContent = fmtMoney(topCountV);
-  $("kpi_top_paid_project").textContent = topPaidP;
-  $("kpi_top_paid_value").textContent = fmtMoney(topPaidV);
-
-  // ✅ Debug Meta (هيكشف السبب فورًا لو لسه 0)
+  // Debug Meta
   const total = data.length;
   const withVendor = data.filter(r=>r.vendor).length;
   const withTime = data.filter(r=>r.time).length;
   const withDate = data.filter(r=>r._emailDate).length;
-  const emailOk = emailRows.length;
 
   const sectorText = $("sector").selectedOptions[0]?.textContent || "الكل";
   const projectText = $("project").value || "الكل";
   const dayText = normText($("day_key").value) || "الكل";
 
   $("meta").textContent =
-    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText} || Debug: total=${total}, vendor=${withVendor}, time=${withTime}, date=${withDate}, emailRows=${emailOk}`;
+    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText} || Debug: total=${total}, vendor=${withVendor}, time=${withTime}, date=${withDate}, emailRows=${emailRows.length}`;
 
   // day datalist
   const daySet = uniqSorted(groupsAll.map(g=>g.day));
   $("day_list").innerHTML = daySet.map(d=>`<option value="${d}"></option>`).join("");
 
-  // chart based on sector/project ignoring day
+  // chart ignoring day filter
   const sectorKey = $("sector").value;
   const projKey = normText($("project").value);
   const groupsNoDay = groupsAll.filter(g=>{
@@ -475,7 +453,6 @@ async function init(){
 
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
 
-  // events
   $("sector").addEventListener("change", ()=>{
     rebuildProjectDropdownForSector();
     render();
