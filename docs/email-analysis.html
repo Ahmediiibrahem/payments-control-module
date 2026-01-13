@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=33">
+  <link rel="stylesheet" href="./assets/css/main.css?v=34">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -102,9 +102,10 @@
               <th>اليوم</th>
               <th>القطاع</th>
               <th>المشروع</th>
-              <th>Time</th>
+              <th>الوقت</th>
               <th>قيمة طلبات الصرف</th>
               <th>قيمة المصروف</th>
+              <th>%</th>
             </tr>
           </thead>
           <tbody id="detail_rows"></tbody>
@@ -112,7 +113,7 @@
       </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Modal (تفاصيل مشروع/إيميل) -->
     <div id="emailModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal">
         <div class="modal-head">
@@ -131,7 +132,7 @@
                   <th>مسلسل</th>
                   <th>الكود</th>
                   <th>اسم المورد</th>
-                  <th>القيمة</th>
+                  <th>القيمة (بعد الملغي)</th>
                   <th>المنصرف</th>
                   <th>المتبقي</th>
                 </tr>
@@ -145,10 +146,8 @@
 
   </div>
 
-  <!-- ✅ لازم PapaParse قبل JS -->
+  <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-  <!-- ✅ الاسم الصحيح: email_analysis.js (underscore) -->
   <script type="module" src="./src/email_analysis.js"></script>
 </body>
 </html>
