@@ -384,8 +384,8 @@ function render(){
   const projectText = $("project").value || "الكل";
   const dayText = normText($("day_key").value) || "الكل";
 
-  $("meta").textContent =
-    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText} || Debug: total=${total}, vendor=${withVendor}, time=${withTime}, date=${withDate}, emailRows=${emailRows.length}`;
+$("meta").textContent =
+  `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText}`;
 
   // day datalist
   const daySet = uniqSorted(groupsAll.map(g=>g.day));
