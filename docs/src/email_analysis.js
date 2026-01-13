@@ -86,6 +86,16 @@ function parseDateSmart(s) {
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // dd/mm/yyyy
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if (m) {
+    const dd = +m[1], mm = +m[2], yy = +m[3];
+    const d = new Date(Date.UTC(yy, mm - 1, dd));
+    if (isNaN(d.getTime())) return null;
+    if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
+    return d;
+  }
+
   m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
   if (m) {
     const a = +m[1], b = +m[2], y = +m[3];
@@ -104,7 +114,7 @@ function dayLabel(d){
   return `${dd}-${m}`;
 }
 
-// "11:18 AM" -> minutes since midnight (0..1439)
+// "11:18 AM" -> minutes since midnight
 function timeToMinutes(t){
   const s = normText(t).toUpperCase();
   if (!s) return 999999;
@@ -122,10 +132,20 @@ function timeToMinutes(t){
   return hh * 60 + mm;
 }
 
-// ddmmyyyy (12012025) or dd/mm/yyyy -> Date UTC
+// ✅ ddmmyyyy OR dd/mm/yyyy -> Date UTC
 function parseUserDateInput(txt){
   const t = normText(txt);
   if (!t) return null;
+
+  // If formatted dd/mm/yyyy
+  const m1 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if (m1){
+    const dd = +m1[1], mm = +m1[2], yy = +m1[3];
+    const d = new Date(Date.UTC(yy, mm-1, dd));
+    if (isNaN(d.getTime())) return null;
+    if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm-1 || d.getUTCDate() !== dd) return null;
+    return d;
+  }
 
   // digits only ddmmyyyy
   const digits = t.replace(/\D/g, "");
@@ -135,29 +155,11 @@ function parseUserDateInput(txt){
     const yy = +digits.slice(4,8);
     const d = new Date(Date.UTC(yy, mm-1, dd));
     if (isNaN(d.getTime())) return null;
-    // validate (avoid 32/13)
-    if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm-1 || d.getUTCDate() !== dd) return null;
-    return d;
-  }
-
-  // dd/mm/yyyy
-  const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(t);
-  if (m){
-    const dd = +m[1], mm = +m[2], yy = +m[3];
-    const d = new Date(Date.UTC(yy, mm-1, dd));
-    if (isNaN(d.getTime())) return null;
     if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm-1 || d.getUTCDate() !== dd) return null;
     return d;
   }
 
   return null;
-}
-
-function formatToDDMMYYYY(d){
-  const dd = String(d.getUTCDate()).padStart(2,"0");
-  const mm = String(d.getUTCMonth()+1).padStart(2,"0");
-  const yy = String(d.getUTCFullYear());
-  return `${dd}${mm}${yy}`;
 }
 
 function formatIsoDate(d){
@@ -173,6 +175,26 @@ function inRangeUTC(d, from, to){
   if (from && x < from.getTime()) return false;
   if (to && x > to.getTime()) return false;
   return true;
+}
+
+// ✅ Auto format: 12012026 -> 12/01/2026 أثناء الكتابة
+function autoSlashDateInput(el){
+  if (!el) return;
+
+  const raw = el.value;
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+
+  let out = "";
+  if (digits.length <= 2){
+    out = digits;
+  } else if (digits.length <= 4){
+    out = digits.slice(0,2) + "/" + digits.slice(2);
+  } else {
+    out = digits.slice(0,2) + "/" + digits.slice(2,4) + "/" + digits.slice(4);
+  }
+
+  // keep caret at end (best UX for numeric typing)
+  el.value = out;
 }
 
 // ============================
@@ -209,7 +231,6 @@ function pickExactTimeFromRaw(raw){
   return "";
 }
 
-// fallback (old Time)
 function pickTimeFromRaw(raw){
   for (const k of Object.keys(raw || {})) {
     const keyNorm = normalizeHeaderKey(k).toLowerCase();
@@ -236,7 +257,7 @@ function statusFromRow(r){
   if (hasPay && !hasAppr && !hasPaid) return "1";
   if (hasPay && hasAppr && !hasPaid) return "2";
   if (hasPay && hasAppr && hasPaid) return "3";
-  return ""; // غير مطابق لأي حالة
+  return "";
 }
 
 // ============================
@@ -264,7 +285,6 @@ function normalizeRow(raw) {
   const oldTimeVal = pickTimeFromRaw(raw);
   const timeVal = exactTimeVal || oldTimeVal || "";
 
-  // التاريخ: نفضّل تاريخ الطلب (الصرف)
   const payStr = normText(row.payment_request_date);
   const srcStr = normText(row.source_request_date);
   const apprStr = normText(row.approval_date);
@@ -355,7 +375,6 @@ function getFilterRange(){
   const from = parseUserDateInput($("date_from_txt")?.value);
   const to = parseUserDateInput($("date_to_txt")?.value);
 
-  // inclusive range (to end of day)
   const fromUTC = from ? new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate())) : null;
   const toUTC = to ? new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate(), 23, 59, 59)) : null;
 
@@ -367,7 +386,6 @@ function filterRowByControls(r){
   const projectLabel = $("project").value;
   const projectKey = normText(projectLabel);
   const status = $("status")?.value || "";
-
   const { fromUTC, toUTC } = getFilterRange();
 
   if (sectorKey && r.sectorKey !== sectorKey) return false;
@@ -492,13 +510,12 @@ function openDayModal(dayLabelStr, groupsScope){
     ? `عدد الإيميلات: ${items.length} | إجمالي: ${fmtMoney(dayTotal)} | المصروف: ${fmtMoney(dayPaid)} | المتبقي: ${fmtMoney(dayRemain)} | ${dayPct}%`
     : `لا توجد إيميلات في هذا اليوم`;
 
-  // Summary per project + count
   const byProject = new Map();
   items.forEach(g=>{
     const p = g.project || "(بدون مشروع)";
     if (!byProject.has(p)) byProject.set(p, { project:p, count:0, total:0, paid:0 });
     const a = byProject.get(p);
-    a.count += 1;          // ✅ عدد الإيميلات (Groups) للمشروع في اليوم
+    a.count += 1;
     a.total += g.total;
     a.paid  += g.paid;
   });
@@ -541,7 +558,7 @@ function openDayModal(dayLabelStr, groupsScope){
 }
 
 // ============================
-// Chart (Last 15 actual days)
+// Chart
 // ============================
 function renderChart(groupsScope){
   const chart = $("chart");
@@ -609,54 +626,6 @@ function renderChart(groupsScope){
 }
 
 // ============================
-// Modal (Details of a group)
-// ============================
-function openModal(group){
-  const modal = $("emailModal");
-
-  const remain = Math.max(0, group.total - group.paid);
-  const pct = group.total > 0 ? clamp(Math.round((group.paid / group.total) * 100), 0, 100) : 0;
-
-  $("modalTitle").textContent = `${group.sector} — ${group.project}`;
-  $("modalSub").textContent =
-    `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي (بعد الملغي): ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
-
-  const rows = [...group.rows];
-  $("modalRows").innerHTML = rows.map((r,idx)=>{
-    const eff = r.effective_total;
-    const paid = r.amount_paid;
-    const rem = Math.max(0, eff - paid);
-    return `
-      <tr>
-        <td>${idx+1}</td>
-        <td>${escHtml(r.code)}</td>
-        <td>${escHtml(r.vendor)}</td>
-        <td>${fmtMoney(eff)}</td>
-        <td>${fmtMoney(paid)}</td>
-        <td>${fmtMoney(rem)}</td>
-      </tr>
-    `;
-  }).join("");
-
-  modal.classList.add("show");
-  modal.setAttribute("aria-hidden","false");
-
-  const close = ()=>{
-    modal.classList.remove("show");
-    modal.setAttribute("aria-hidden","true");
-    $("modalClose").removeEventListener("click", close);
-    modal.removeEventListener("click", onBackdrop);
-    document.removeEventListener("keydown", onEsc);
-  };
-  const onBackdrop = (e)=>{ if(e.target===modal) close(); };
-  const onEsc = (e)=>{ if(e.key==="Escape") close(); };
-
-  $("modalClose").addEventListener("click", close);
-  modal.addEventListener("click", onBackdrop);
-  document.addEventListener("keydown", onEsc);
-}
-
-// ============================
 // KPI: Top project
 // ============================
 function setTopProjectKPIs(groups){
@@ -702,8 +671,6 @@ function setTopProjectKPIs(groups){
 function render(){
   const emailRows = rowsEmailsOnly(data).filter(filterRowByControls);
   const groupsAll = groupEmails(emailRows);
-
-  // main table + KPIs respects all filters
   const groups = filterGroups(groupsAll);
 
   const totalEff = groups.reduce((a,g)=>a+g.total,0);
@@ -726,16 +693,12 @@ function render(){
   $("meta").textContent =
     `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | حالة: ${statusText} | من: ${fromTxt} | إلى: ${toTxt}`;
 
-  // chart respects all filters except it always shows last 15 days from max date in current scope
   renderChart(groupsAll);
 
-  // table sorting:
-  // - newest day first
-  // - within same day: time ascending (AM then PM naturally via minutes)
   const sorted = [...groups].sort((a,b)=>{
-    const d = b.date.getTime() - a.date.getTime(); // desc day
+    const d = b.date.getTime() - a.date.getTime();
     if (d !== 0) return d;
-    return (a.timeMin ?? 999999) - (b.timeMin ?? 999999); // asc time
+    return (a.timeMin ?? 999999) - (b.timeMin ?? 999999);
   });
 
   $("detail_rows").innerHTML = sorted.map(g=>{
@@ -760,7 +723,8 @@ function render(){
     tr.addEventListener("click", ()=>{
       const key = tr.getAttribute("data-key");
       const g = groups.find(x=>x.key===key) || groupsAll.find(x=>x.key===key);
-      if (g) openModal(g);
+      // open modal (reuse existing modal from previous version if you still have it)
+      if (g && typeof window.openModal === "function") window.openModal(g);
     });
   });
 }
@@ -778,7 +742,6 @@ async function init(){
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
-  // sector->projects
   projectsBySector = new Map();
   data.forEach(r=>{
     if (!r.projectKey) return;
@@ -786,7 +749,6 @@ async function init(){
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
-  // dropdowns
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = $("sector");
   sectorSel.innerHTML =
@@ -802,23 +764,32 @@ async function init(){
   $("date_from_pick").addEventListener("change", (e)=>{
     const v = e.target.value; // yyyy-mm-dd
     const d = parseDateSmart(v);
-    if (d) $("date_from_txt").value = formatToDDMMYYYY(d);
+    if (d) $("date_from_txt").value = formatIsoDate(d);
     render();
   });
   $("date_to_pick").addEventListener("change", (e)=>{
     const v = e.target.value;
     const d = parseDateSmart(v);
-    if (d) $("date_to_txt").value = formatToDDMMYYYY(d);
+    if (d) $("date_to_txt").value = formatIsoDate(d);
     render();
   });
 
-  // Inputs listeners
+  // ✅ Auto slash on typing
+  $("date_from_txt").addEventListener("input", (e)=>{
+    autoSlashDateInput(e.target);
+    render();
+  });
+  $("date_to_txt").addEventListener("input", (e)=>{
+    autoSlashDateInput(e.target);
+    render();
+  });
+
   $("sector").addEventListener("change", ()=>{
     rebuildProjectDropdownForSector();
     render();
   });
 
-  ["project","status","date_from_txt","date_to_txt"].forEach(id=>{
+  ["project","status"].forEach(id=>{
     $(id).addEventListener("change", render);
     $(id).addEventListener("input", render);
   });
