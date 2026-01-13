@@ -52,7 +52,15 @@ function clamp(n, min, max){
   return Math.max(min, Math.min(max, n));
 }
 
-// ✅ Parser للتاريخ
+function escHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[ch]));
+}
+
+// ============================
+// Date & Time
+// ============================
 function parseDateSmart(s) {
   let t = normText(s);
   if (!t || t === "-" || t === "0") return null;
@@ -94,6 +102,77 @@ function dayLabel(d){
   const m = MONTHS[d.getUTCMonth()];
   const dd = String(d.getUTCDate()).padStart(2,"0");
   return `${dd}-${m}`;
+}
+
+// "11:18 AM" -> minutes since midnight (0..1439)
+function timeToMinutes(t){
+  const s = normText(t).toUpperCase();
+  if (!s) return 999999;
+
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/.exec(s);
+  if (!m) return 999999;
+
+  let hh = +m[1];
+  const mm = +(m[2] || "0");
+  const ap = m[3];
+
+  if (hh === 12) hh = 0;
+  if (ap === "PM") hh += 12;
+
+  return hh * 60 + mm;
+}
+
+// ddmmyyyy (12012025) or dd/mm/yyyy -> Date UTC
+function parseUserDateInput(txt){
+  const t = normText(txt);
+  if (!t) return null;
+
+  // digits only ddmmyyyy
+  const digits = t.replace(/\D/g, "");
+  if (digits.length === 8){
+    const dd = +digits.slice(0,2);
+    const mm = +digits.slice(2,4);
+    const yy = +digits.slice(4,8);
+    const d = new Date(Date.UTC(yy, mm-1, dd));
+    if (isNaN(d.getTime())) return null;
+    // validate (avoid 32/13)
+    if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm-1 || d.getUTCDate() !== dd) return null;
+    return d;
+  }
+
+  // dd/mm/yyyy
+  const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(t);
+  if (m){
+    const dd = +m[1], mm = +m[2], yy = +m[3];
+    const d = new Date(Date.UTC(yy, mm-1, dd));
+    if (isNaN(d.getTime())) return null;
+    if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm-1 || d.getUTCDate() !== dd) return null;
+    return d;
+  }
+
+  return null;
+}
+
+function formatToDDMMYYYY(d){
+  const dd = String(d.getUTCDate()).padStart(2,"0");
+  const mm = String(d.getUTCMonth()+1).padStart(2,"0");
+  const yy = String(d.getUTCFullYear());
+  return `${dd}${mm}${yy}`;
+}
+
+function formatIsoDate(d){
+  const dd = String(d.getUTCDate()).padStart(2,"0");
+  const mm = String(d.getUTCMonth()+1).padStart(2,"0");
+  const yy = String(d.getUTCFullYear());
+  return `${dd}/${mm}/${yy}`;
+}
+
+function inRangeUTC(d, from, to){
+  if (!(d instanceof Date) || isNaN(d.getTime())) return false;
+  const x = d.getTime();
+  if (from && x < from.getTime()) return false;
+  if (to && x > to.getTime()) return false;
+  return true;
 }
 
 // ============================
@@ -143,6 +222,24 @@ function pickTimeFromRaw(raw){
 }
 
 // ============================
+// Status logic (1/2/3)
+// ============================
+function hasValidDateStr(s){
+  return !!parseDateSmart(s);
+}
+
+function statusFromRow(r){
+  const hasPay = hasValidDateStr(r.payment_request_date);
+  const hasAppr = hasValidDateStr(r.approval_date);
+  const hasPaid = hasValidDateStr(r.payment_date);
+
+  if (hasPay && !hasAppr && !hasPaid) return "1";
+  if (hasPay && hasAppr && !hasPaid) return "2";
+  if (hasPay && hasAppr && hasPaid) return "3";
+  return ""; // غير مطابق لأي حالة
+}
+
+// ============================
 // Normalize Row
 // ============================
 function normalizeRow(raw) {
@@ -170,6 +267,9 @@ function normalizeRow(raw) {
   // التاريخ: نفضّل تاريخ الطلب (الصرف)
   const payStr = normText(row.payment_request_date);
   const srcStr = normText(row.source_request_date);
+  const apprStr = normText(row.approval_date);
+  const paidStr = normText(row.payment_date);
+
   const dPay = parseDateSmart(payStr);
   const dSrc = parseDateSmart(srcStr);
   const emailDate = dPay || dSrc || null;
@@ -178,7 +278,6 @@ function normalizeRow(raw) {
   const amount_paid = toNumber(row.amount_paid);
   const amount_canceled = toNumber(row.amount_canceled);
 
-  // ✅ الفعلي = total - canceled
   const effective_total = Math.max(0, amount_total - amount_canceled);
   const effective_remaining = Math.max(0, effective_total - amount_paid);
 
@@ -199,8 +298,18 @@ function normalizeRow(raw) {
 
     payment_request_date: payStr,
     source_request_date: srcStr,
+    approval_date: apprStr,
+    payment_date: paidStr,
+
     _emailDate: emailDate,
     time: timeVal,
+    _timeMin: timeToMinutes(timeVal),
+
+    _status: statusFromRow({
+      payment_request_date: payStr,
+      approval_date: apprStr,
+      payment_date: paidStr
+    }),
   };
 }
 
@@ -236,10 +345,37 @@ function rebuildProjectDropdownForSector() {
 }
 
 // ============================
-// Emails logic
+// Filtering + Grouping
 // ============================
 function rowsEmailsOnly(rows){
   return rows.filter(r => r.vendor && r.time && r._emailDate);
+}
+
+function getFilterRange(){
+  const from = parseUserDateInput($("date_from_txt")?.value);
+  const to = parseUserDateInput($("date_to_txt")?.value);
+
+  // inclusive range (to end of day)
+  const fromUTC = from ? new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate())) : null;
+  const toUTC = to ? new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate(), 23, 59, 59)) : null;
+
+  return { fromUTC, toUTC };
+}
+
+function filterRowByControls(r){
+  const sectorKey = $("sector").value;
+  const projectLabel = $("project").value;
+  const projectKey = normText(projectLabel);
+  const status = $("status")?.value || "";
+
+  const { fromUTC, toUTC } = getFilterRange();
+
+  if (sectorKey && r.sectorKey !== sectorKey) return false;
+  if (projectKey && r.projectKey !== projectKey) return false;
+  if (status && r._status !== status) return false;
+  if ((fromUTC || toUTC) && !inRangeUTC(r._emailDate, fromUTC, toUTC)) return false;
+
+  return true;
 }
 
 function groupEmails(rows){
@@ -247,8 +383,6 @@ function groupEmails(rows){
 
   rows.forEach(r => {
     const dlab = dayLabel(r._emailDate);
-
-    // group key: sector + project + time + day
     const key = `${r.sectorKey}|||${r.projectKey}|||${r.time}|||${dlab}`;
 
     if (!map.has(key)){
@@ -259,10 +393,12 @@ function groupEmails(rows){
         sector:r.sector,
         project:r.project,
         time:r.time,
+        timeMin:r._timeMin,
         day:dlab,
         date:r._emailDate,
-        total:0, // effective
+        total:0,
         paid:0,
+        status:r._status,
         rows:[]
       });
     }
@@ -280,25 +416,21 @@ function filterGroups(groups){
   const sectorKey = $("sector").value;
   const projectLabel = $("project").value;
   const projectKey = normText(projectLabel);
-  const dayInput = normText($("day_key").value);
+  const status = $("status")?.value || "";
+  const { fromUTC, toUTC } = getFilterRange();
 
   return groups.filter(g=>{
     if (sectorKey && g.sectorKey !== sectorKey) return false;
     if (projectKey && g.projectKey !== projectKey) return false;
-    if (dayInput && !g.day.toLowerCase().includes(dayInput.toLowerCase())) return false;
+    if (status && g.status !== status) return false;
+    if ((fromUTC || toUTC) && !inRangeUTC(g.date, fromUTC, toUTC)) return false;
     return true;
   });
 }
 
 // ============================
-// Day Modal (Click on chart bar) - Summary per project
+// Day Modal (Click on chart bar) - Summary per project + count
 // ============================
-function escHtml(s){
-  return String(s ?? "").replace(/[&<>"']/g, ch => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-  }[ch]));
-}
-
 function ensureDayModal(){
   let modal = document.getElementById("dayModal");
   if (modal) return modal;
@@ -324,6 +456,7 @@ function ensureDayModal(){
             <thead>
               <tr>
                 <th>المشروع</th>
+                <th>عدد الإيميلات</th>
                 <th>الإجمالي (بعد الملغي)</th>
                 <th>المصروف</th>
                 <th>المتبقي</th>
@@ -355,18 +488,17 @@ function openDayModal(dayLabelStr, groupsScope){
   const dayPct = dayTotal > 0 ? clamp(Math.round((dayPaid/dayTotal)*100), 0, 100) : 0;
 
   title.textContent = `ملخص يوم: ${dayLabelStr}`;
-
-  // ✅ السطر العلوي: totals + remaining + %
   sub.textContent = items.length
     ? `عدد الإيميلات: ${items.length} | إجمالي: ${fmtMoney(dayTotal)} | المصروف: ${fmtMoney(dayPaid)} | المتبقي: ${fmtMoney(dayRemain)} | ${dayPct}%`
     : `لا توجد إيميلات في هذا اليوم`;
 
-  // ✅ ملخص لكل مشروع (تجميع)
+  // Summary per project + count
   const byProject = new Map();
   items.forEach(g=>{
     const p = g.project || "(بدون مشروع)";
-    if (!byProject.has(p)) byProject.set(p, { project:p, total:0, paid:0 });
+    if (!byProject.has(p)) byProject.set(p, { project:p, count:0, total:0, paid:0 });
     const a = byProject.get(p);
+    a.count += 1;          // ✅ عدد الإيميلات (Groups) للمشروع في اليوم
     a.total += g.total;
     a.paid  += g.paid;
   });
@@ -382,6 +514,7 @@ function openDayModal(dayLabelStr, groupsScope){
   tbody.innerHTML = rows.map(r=>`
     <tr>
       <td>${escHtml(r.project)}</td>
+      <td>${r.count}</td>
       <td>${fmtMoney(r.total)}</td>
       <td>${fmtMoney(r.paid)}</td>
       <td>${fmtMoney(r.remain)}</td>
@@ -408,22 +541,19 @@ function openDayModal(dayLabelStr, groupsScope){
 }
 
 // ============================
-// Chart (آخر 15 يوم فعليين)
-// - ✅ الرقم فوق العمود: إجمالي اليوم (بعد الملغي) (هيظهر لأن overflow visible inline)
+// Chart (Last 15 actual days)
 // ============================
-function renderChart(groupsNoDay){
+function renderChart(groupsScope){
   const chart = $("chart");
   chart.innerHTML = "";
 
-  const valid = (groupsNoDay || []).filter(g => g?.date instanceof Date && !isNaN(g.date.getTime()));
+  const valid = (groupsScope || []).filter(g => g?.date instanceof Date && !isNaN(g.date.getTime()));
   if (!valid.length) return;
 
-  // end = آخر تاريخ فيه مطالبة
   const maxMs = valid.reduce((m,g)=>Math.max(m,g.date.getTime()), 0);
   const end = new Date(maxMs);
   const start = new Date(end.getTime() - 14*24*60*60*1000);
 
-  // 15 day list UTC
   const days = [];
   const base = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
   for(let i=0;i<15;i++){
@@ -432,13 +562,12 @@ function renderChart(groupsNoDay){
     days.push(d);
   }
 
-  // aggregate per day
   const agg = new Map();
   days.forEach(d => agg.set(dayLabel(d), { total: 0, paid: 0 }));
   valid.forEach(g=>{
     if (agg.has(g.day)){
       const a = agg.get(g.day);
-      a.total += g.total; // effective
+      a.total += g.total;
       a.paid  += g.paid;
     }
   });
@@ -448,13 +577,9 @@ function renderChart(groupsNoDay){
     const a = agg.get(dl) || { total:0, paid:0 };
 
     const has = a.total > 0;
-    const rawPct = has ? Math.round((a.paid / a.total) * 100) : 0;
-    const pct = clamp(rawPct, 0, 100);
+    const pct = has ? clamp(Math.round((a.paid / a.total) * 100), 0, 100) : 0;
 
-    // ثابت للأيام اللي فيها مطالبات
     const stackHeight = has ? 100 : 0;
-
-    // visibility small pct
     const paidExtraStyle = (has && pct > 0 && pct < 10) ? "min-height:18px;" : "";
 
     return `
@@ -493,7 +618,6 @@ function openModal(group){
   const pct = group.total > 0 ? clamp(Math.round((group.paid / group.total) * 100), 0, 100) : 0;
 
   $("modalTitle").textContent = `${group.sector} — ${group.project}`;
-  // ✅ المتبقي قبل النسبة
   $("modalSub").textContent =
     `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي (بعد الملغي): ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
 
@@ -505,8 +629,8 @@ function openModal(group){
     return `
       <tr>
         <td>${idx+1}</td>
-        <td>${r.code}</td>
-        <td>${r.vendor}</td>
+        <td>${escHtml(r.code)}</td>
+        <td>${escHtml(r.vendor)}</td>
         <td>${fmtMoney(eff)}</td>
         <td>${fmtMoney(paid)}</td>
         <td>${fmtMoney(rem)}</td>
@@ -576,10 +700,10 @@ function setTopProjectKPIs(groups){
 // Render
 // ============================
 function render(){
-  const emailRows = rowsEmailsOnly(data);
+  const emailRows = rowsEmailsOnly(data).filter(filterRowByControls);
   const groupsAll = groupEmails(emailRows);
 
-  // groups respects sector/project/day filter for table + main KPIs
+  // main table + KPIs respects all filters
   const groups = filterGroups(groupsAll);
 
   const totalEff = groups.reduce((a,g)=>a+g.total,0);
@@ -589,41 +713,44 @@ function render(){
   $("kpi_total_amount").textContent = fmtMoney(totalEff);
   $("kpi_paid_amount").textContent = fmtMoney(paid);
 
-  // ✅ أعلى مشروع (على نفس الفلتر الحالي)
   setTopProjectKPIs(groups);
 
   const sectorText = $("sector").selectedOptions[0]?.textContent || "الكل";
   const projectText = $("project").value || "الكل";
-  const dayText = normText($("day_key").value) || "الكل";
+  const statusText = $("status")?.selectedOptions?.[0]?.textContent || "الكل";
+
+  const { fromUTC, toUTC } = getFilterRange();
+  const fromTxt = fromUTC ? formatIsoDate(fromUTC) : "—";
+  const toTxt = toUTC ? formatIsoDate(toUTC) : "—";
+
   $("meta").textContent =
-    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText}`;
+    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | حالة: ${statusText} | من: ${fromTxt} | إلى: ${toTxt}`;
 
-  // day datalist from ALL (not just filtered)
-  const daySet = uniqSorted(groupsAll.map(g=>g.day));
-  $("day_list").innerHTML = daySet.map(d=>`<option value="${d}"></option>`).join("");
+  // chart respects all filters except it always shows last 15 days from max date in current scope
+  renderChart(groupsAll);
 
-  // chart ignores day filter but respects sector/project
-  const sectorKey = $("sector").value;
-  const projKey = normText($("project").value);
-  const groupsNoDay = groupsAll.filter(g=>{
-    if (sectorKey && g.sectorKey !== sectorKey) return false;
-    if (projKey && g.projectKey !== projKey) return false;
-    return true;
+  // table sorting:
+  // - newest day first
+  // - within same day: time ascending (AM then PM naturally via minutes)
+  const sorted = [...groups].sort((a,b)=>{
+    const d = b.date.getTime() - a.date.getTime(); // desc day
+    if (d !== 0) return d;
+    return (a.timeMin ?? 999999) - (b.timeMin ?? 999999); // asc time
   });
-  renderChart(groupsNoDay);
 
-  // table newest→oldest
-  const sorted = [...groups].sort((a,b)=> b.date.getTime() - a.date.getTime());
   $("detail_rows").innerHTML = sorted.map(g=>{
+    const remain = Math.max(0, g.total - g.paid);
     const pct = g.total > 0 ? clamp(Math.round((g.paid / g.total) * 100), 0, 100) : 0;
+
     return `
       <tr class="clickable-row" data-key="${g.key}">
         <td>${g.day}</td>
-        <td>${g.sector}</td>
-        <td>${g.project}</td>
-        <td>${g.time}</td>
+        <td>${escHtml(g.sector)}</td>
+        <td>${escHtml(g.project)}</td>
+        <td>${escHtml(g.time)}</td>
         <td>${fmtMoney(g.total)}</td>
         <td>${fmtMoney(g.paid)}</td>
+        <td>${fmtMoney(remain)}</td>
         <td>${pct}%</td>
       </tr>
     `;
@@ -632,7 +759,7 @@ function render(){
   $("detail_rows").querySelectorAll("tr").forEach(tr=>{
     tr.addEventListener("click", ()=>{
       const key = tr.getAttribute("data-key");
-      const g = groupsAll.find(x=>x.key===key);
+      const g = groups.find(x=>x.key===key) || groupsAll.find(x=>x.key===key);
       if (g) openModal(g);
     });
   });
@@ -668,11 +795,30 @@ async function init(){
 
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
 
+  // Calendar buttons wiring
+  $("date_from_btn").addEventListener("click", ()=> $("date_from_pick").showPicker ? $("date_from_pick").showPicker() : $("date_from_pick").click());
+  $("date_to_btn").addEventListener("click", ()=> $("date_to_pick").showPicker ? $("date_to_pick").showPicker() : $("date_to_pick").click());
+
+  $("date_from_pick").addEventListener("change", (e)=>{
+    const v = e.target.value; // yyyy-mm-dd
+    const d = parseDateSmart(v);
+    if (d) $("date_from_txt").value = formatToDDMMYYYY(d);
+    render();
+  });
+  $("date_to_pick").addEventListener("change", (e)=>{
+    const v = e.target.value;
+    const d = parseDateSmart(v);
+    if (d) $("date_to_txt").value = formatToDDMMYYYY(d);
+    render();
+  });
+
+  // Inputs listeners
   $("sector").addEventListener("change", ()=>{
     rebuildProjectDropdownForSector();
     render();
   });
-  ["project","day_key"].forEach(id=>{
+
+  ["project","status","date_from_txt","date_to_txt"].forEach(id=>{
     $(id).addEventListener("change", render);
     $(id).addEventListener("input", render);
   });
@@ -680,7 +826,11 @@ async function init(){
   $("clearBtn").addEventListener("click", ()=>{
     $("sector").value = "";
     rebuildProjectDropdownForSector();
-    $("day_key").value = "";
+    $("status").value = "";
+    $("date_from_txt").value = "";
+    $("date_to_txt").value = "";
+    $("date_from_pick").value = "";
+    $("date_to_pick").value = "";
     render();
   });
 
