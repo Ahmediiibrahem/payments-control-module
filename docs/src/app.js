@@ -317,11 +317,13 @@ function render() {
 // Init
 // ============================
 async function init() {
-  const res = await fetch("./data.csv", { cache: "no-store" });
+  import { DATA_SOURCE } from "./config.js";
+  const res = await fetch(DATA_SOURCE.cashCsvUrl, { cache: "no-store" });
+
   if (!res.ok) {
-    alert("مش قادر أقرأ data.csv — تأكد إنه موجود في docs/");
-    return;
-  }
+  alert("مش قادر أقرأ الداتا من Google Sheets — تأكد إن الشيت Published و الرابط صحيح");
+  return;
+}
 
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
