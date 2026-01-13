@@ -120,7 +120,7 @@ tbody tr:hover{background:rgba(255,255,255,.06)}
   width:100%;height:100%;
   background:rgba(255,255,255,.10);
   border:1px solid var(--border);
-  border-radius:12px;overflow:hidden;
+  border-radius:12px;overflow:visible;
   position:relative;display:flex;flex-direction:column;justify-content:flex-end
 }
 .bar-paid{background:rgba(255,255,255,.28);position:relative}
