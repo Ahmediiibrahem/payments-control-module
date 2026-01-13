@@ -48,29 +48,29 @@ function normalizeHeaderKey(h) {
     .trim();
 }
 
-// ✅ Parser للتاريخ (يدعم وقت / - / / / ترتيب يوم-شهر-سنة)
+function clamp(n, min, max){
+  return Math.max(min, Math.min(max, n));
+}
+
+// ✅ Parser للتاريخ
 function parseDateSmart(s) {
   let t = normText(s);
   if (!t || t === "-" || t === "0") return null;
 
-  // remove time part if exists (space or T)
   t = t.split("T")[0].split(" ")[0].trim();
 
-  // YYYY-MM-DD
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
   if (m) {
     const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
     return isNaN(d.getTime()) ? null : d;
   }
 
-  // YYYY/MM/DD
   m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(t);
   if (m) {
     const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
     return isNaN(d.getTime()) ? null : d;
   }
 
-  // DD-MM-YYYY
   m = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(t);
   if (m) {
     const dd = +m[1], mm = +m[2], yy = +m[3];
@@ -78,7 +78,6 @@ function parseDateSmart(s) {
     return isNaN(d.getTime()) ? null : d;
   }
 
-  // M/D/YYYY or D/M/YYYY (smart)
   m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
   if (m) {
     const a = +m[1], b = +m[2], y = +m[3];
@@ -114,7 +113,7 @@ function parseCSV(text) {
 }
 
 // ============================
-// Pick Exacttime from RAW
+// Pick Exacttime
 // ============================
 function pickExactTimeFromRaw(raw){
   for (const k of Object.keys(raw || {})) {
@@ -131,7 +130,7 @@ function pickExactTimeFromRaw(raw){
   return "";
 }
 
-// (Old fallback) لو حد لسه عنده عمود Time القديم
+// fallback (old Time)
 function pickTimeFromRaw(raw){
   for (const k of Object.keys(raw || {})) {
     const keyNorm = normalizeHeaderKey(k).toLowerCase();
@@ -139,16 +138,8 @@ function pickTimeFromRaw(raw){
       const v = normText(raw[k]);
       if (v) return v;
     }
-    if (keyNorm === "الوقت" || keyNorm === "تايم") {
-      const v = normText(raw[k]);
-      if (v) return v;
-    }
   }
   return "";
-}
-
-function clamp(n, min, max){
-  return Math.max(min, Math.min(max, n));
 }
 
 // ============================
@@ -156,7 +147,6 @@ function clamp(n, min, max){
 // ============================
 function normalizeRow(raw) {
   const row = {};
-
   Object.entries(raw).forEach(([key, value]) => {
     const kNorm = normalizeHeaderKey(key);
     const mapped = HEADER_MAP[kNorm] || kNorm;
@@ -173,35 +163,29 @@ function normalizeRow(raw) {
 
   const vendor = normalizeVendor(row.vendor);
 
-  // ✅ Time: prefer Exacttime (human), fallback to old Time if needed
   const exactTimeVal = pickExactTimeFromRaw(raw) || normText(row.exact_time);
   const oldTimeVal = pickTimeFromRaw(raw);
   const timeVal = exactTimeVal || oldTimeVal || "";
 
-  // ✅ التاريخ: نفضّل تاريخ الطلب (الصرف)
+  // التاريخ: نفضّل تاريخ الطلب (الصرف)
   const payStr = normText(row.payment_request_date);
   const srcStr = normText(row.source_request_date);
-
   const dPay = parseDateSmart(payStr);
   const dSrc = parseDateSmart(srcStr);
-
   const emailDate = dPay || dSrc || null;
 
   const amount_total = toNumber(row.amount_total);
   const amount_paid = toNumber(row.amount_paid);
   const amount_canceled = toNumber(row.amount_canceled);
 
-  // ✅ المطلوب: إجمالي طلب الصرف الفعلي = total - canceled
+  // ✅ الفعلي = total - canceled
   const effective_total = Math.max(0, amount_total - amount_canceled);
-
-  // ✅ متبقي فعلي (عشان ما يحصلش خلط)
   const effective_remaining = Math.max(0, effective_total - amount_paid);
 
   return {
     sectorKey, projectKey,
     sector: sectorLabel,
     project: projectLabel,
-
     vendor,
     code: normText(row.code),
     request_id: normText(row.request_id),
@@ -215,7 +199,6 @@ function normalizeRow(raw) {
 
     payment_request_date: payStr,
     source_request_date: srcStr,
-
     _emailDate: emailDate,
     time: timeVal,
   };
@@ -256,7 +239,6 @@ function rebuildProjectDropdownForSector() {
 // Emails logic
 // ============================
 function rowsEmailsOnly(rows){
-  // لازم Vendor + Time + Date
   return rows.filter(r => r.vendor && r.time && r._emailDate);
 }
 
@@ -265,6 +247,8 @@ function groupEmails(rows){
 
   rows.forEach(r => {
     const dlab = dayLabel(r._emailDate);
+
+    // group key: sector + project + time + day
     const key = `${r.sectorKey}|||${r.projectKey}|||${r.time}|||${dlab}`;
 
     if (!map.has(key)){
@@ -277,18 +261,15 @@ function groupEmails(rows){
         time:r.time,
         day:dlab,
         date:r._emailDate,
-        total:0, // ✅ effective total
+        total:0, // effective
         paid:0,
         rows:[]
       });
     }
 
     const g = map.get(key);
-
-    // ✅ التجميع الصحيح
     g.total += r.effective_total;
     g.paid  += r.amount_paid;
-
     g.rows.push(r);
   });
 
@@ -310,7 +291,7 @@ function filterGroups(groups){
 }
 
 // ============================
-// Day Modal (Click on chart bar)
+// Day Modal (Click on chart bar) - Summary per project
 // ============================
 function escHtml(s){
   return String(s ?? "").replace(/[&<>"']/g, ch => ({
@@ -343,9 +324,10 @@ function ensureDayModal(){
             <thead>
               <tr>
                 <th>المشروع</th>
-                <th>قيمة طلب الصرف (بعد الملغي)</th>
+                <th>الإجمالي (بعد الملغي)</th>
                 <th>المصروف</th>
-                <th>الوقت</th>
+                <th>المتبقي</th>
+                <th>%</th>
               </tr>
             </thead>
             <tbody id="dayModalRows"></tbody>
@@ -367,21 +349,45 @@ function openDayModal(dayLabelStr, groupsScope){
 
   const items = (groupsScope || []).filter(g => g.day === dayLabelStr && g.total > 0);
 
-  title.textContent = `إيميلات يوم: ${dayLabelStr}`;
+  const dayTotal = items.reduce((a,x)=>a+x.total,0);
+  const dayPaid  = items.reduce((a,x)=>a+x.paid,0);
+  const dayRemain = Math.max(0, dayTotal - dayPaid);
+  const dayPct = dayTotal > 0 ? clamp(Math.round((dayPaid/dayTotal)*100), 0, 100) : 0;
+
+  title.textContent = `ملخص يوم: ${dayLabelStr}`;
+
+  // ✅ السطر العلوي: totals + remaining + %
   sub.textContent = items.length
-    ? `عدد الإيميلات: ${items.length} | إجمالي طلبات الصرف (بعد الملغي): ${fmtMoney(items.reduce((a,x)=>a+x.total,0))}`
+    ? `عدد الإيميلات: ${items.length} | إجمالي: ${fmtMoney(dayTotal)} | المصروف: ${fmtMoney(dayPaid)} | المتبقي: ${fmtMoney(dayRemain)} | ${dayPct}%`
     : `لا توجد إيميلات في هذا اليوم`;
 
-  tbody.innerHTML = items
-    .sort((a,b)=> (b.total - a.total))
-    .map(g=>`
-      <tr>
-        <td>${escHtml(g.project || "(بدون مشروع)")}</td>
-        <td>${fmtMoney(g.total)}</td>
-        <td>${fmtMoney(g.paid)}</td>
-        <td>${escHtml(g.time)}</td>
-      </tr>
-    `).join("");
+  // ✅ ملخص لكل مشروع (تجميع)
+  const byProject = new Map();
+  items.forEach(g=>{
+    const p = g.project || "(بدون مشروع)";
+    if (!byProject.has(p)) byProject.set(p, { project:p, total:0, paid:0 });
+    const a = byProject.get(p);
+    a.total += g.total;
+    a.paid  += g.paid;
+  });
+
+  const rows = Array.from(byProject.values())
+    .map(x=>{
+      const remain = Math.max(0, x.total - x.paid);
+      const pct = x.total > 0 ? clamp(Math.round((x.paid/x.total)*100), 0, 100) : 0;
+      return { ...x, remain, pct };
+    })
+    .sort((a,b)=> b.total - a.total);
+
+  tbody.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${escHtml(r.project)}</td>
+      <td>${fmtMoney(r.total)}</td>
+      <td>${fmtMoney(r.paid)}</td>
+      <td>${fmtMoney(r.remain)}</td>
+      <td>${r.pct}%</td>
+    </tr>
+  `).join("");
 
   modal.classList.add("show");
   modal.setAttribute("aria-hidden","false");
@@ -403,7 +409,7 @@ function openDayModal(dayLabelStr, groupsScope){
 
 // ============================
 // Chart (آخر 15 يوم فعليين)
-// + ✅ الرقم فوق كل عمود = إجمالي اليوم (بعد الملغي)
+// - ✅ الرقم فوق العمود: إجمالي اليوم (بعد الملغي) (هيظهر لأن overflow visible inline)
 // ============================
 function renderChart(groupsNoDay){
   const chart = $("chart");
@@ -412,10 +418,12 @@ function renderChart(groupsNoDay){
   const valid = (groupsNoDay || []).filter(g => g?.date instanceof Date && !isNaN(g.date.getTime()));
   if (!valid.length) return;
 
+  // end = آخر تاريخ فيه مطالبة
   const maxMs = valid.reduce((m,g)=>Math.max(m,g.date.getTime()), 0);
   const end = new Date(maxMs);
   const start = new Date(end.getTime() - 14*24*60*60*1000);
 
+  // 15 day list UTC
   const days = [];
   const base = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
   for(let i=0;i<15;i++){
@@ -424,12 +432,13 @@ function renderChart(groupsNoDay){
     days.push(d);
   }
 
+  // aggregate per day
   const agg = new Map();
   days.forEach(d => agg.set(dayLabel(d), { total: 0, paid: 0 }));
   valid.forEach(g=>{
     if (agg.has(g.day)){
       const a = agg.get(g.day);
-      a.total += g.total; // ✅ already effective
+      a.total += g.total; // effective
       a.paid  += g.paid;
     }
   });
@@ -439,19 +448,19 @@ function renderChart(groupsNoDay){
     const a = agg.get(dl) || { total:0, paid:0 };
 
     const has = a.total > 0;
-
-    // ✅ paid% على effective total، مع cap 100%
     const rawPct = has ? Math.round((a.paid / a.total) * 100) : 0;
     const pct = clamp(rawPct, 0, 100);
 
+    // ثابت للأيام اللي فيها مطالبات
     const stackHeight = has ? 100 : 0;
+
+    // visibility small pct
     const paidExtraStyle = (has && pct > 0 && pct < 10) ? "min-height:18px;" : "";
 
     return `
       <div class="chart-group" data-day="${dl}">
-        <div class="chart-bars" title="${has ? `Total(after canceled): ${fmtMoney(a.total)} | Paid: ${fmtMoney(a.paid)} | ${pct}%` : "No emails"}">
-          <div class="bar-stack" style="height:${stackHeight}%;">
-            <!-- ✅ إجمالي اليوم فوق العمود -->
+        <div class="chart-bars" title="${has ? `Total: ${fmtMoney(a.total)} | Paid: ${fmtMoney(a.paid)} | ${pct}%` : "No emails"}">
+          <div class="bar-stack" style="height:${stackHeight}%; overflow:visible;">
             <div class="bar-top-value">${has ? fmtMoney(a.total) : ""}</div>
 
             ${has ? `
@@ -480,19 +489,19 @@ function renderChart(groupsNoDay){
 function openModal(group){
   const modal = $("emailModal");
 
-  const paidPct = group.total > 0 ? clamp(Math.round((group.paid / group.total) * 100), 0, 100) : 0;
+  const remain = Math.max(0, group.total - group.paid);
+  const pct = group.total > 0 ? clamp(Math.round((group.paid / group.total) * 100), 0, 100) : 0;
 
   $("modalTitle").textContent = `${group.sector} — ${group.project}`;
+  // ✅ المتبقي قبل النسبة
   $("modalSub").textContent =
-    `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي (بعد الملغي): ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | ${paidPct}%`;
+    `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي (بعد الملغي): ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
 
   const rows = [...group.rows];
-
   $("modalRows").innerHTML = rows.map((r,idx)=>{
     const eff = r.effective_total;
     const paid = r.amount_paid;
-    const remain = Math.max(0, eff - paid);
-
+    const rem = Math.max(0, eff - paid);
     return `
       <tr>
         <td>${idx+1}</td>
@@ -500,7 +509,7 @@ function openModal(group){
         <td>${r.vendor}</td>
         <td>${fmtMoney(eff)}</td>
         <td>${fmtMoney(paid)}</td>
-        <td>${fmtMoney(remain)}</td>
+        <td>${fmtMoney(rem)}</td>
       </tr>
     `;
   }).join("");
@@ -524,16 +533,64 @@ function openModal(group){
 }
 
 // ============================
+// KPI: Top project
+// ============================
+function setTopProjectKPIs(groups){
+  const byProjectCount = new Map();
+  const byProjectPaid  = new Map();
+
+  (groups || []).forEach(g=>{
+    const p = g.project || "(بدون مشروع)";
+    byProjectCount.set(p, (byProjectCount.get(p) || 0) + 1);
+    byProjectPaid.set(p, (byProjectPaid.get(p) || 0) + (g.paid || 0));
+  });
+
+  let topCountP = "—", topCountV = "—";
+  if (byProjectCount.size){
+    let bestP = null, bestV = -1;
+    for (const [p,v] of byProjectCount.entries()){
+      if (v > bestV){ bestV = v; bestP = p; }
+    }
+    topCountP = bestP ?? "—";
+    topCountV = String(bestV);
+  }
+
+  let topPaidP = "—", topPaidV = "—";
+  if (byProjectPaid.size){
+    let bestP = null, bestV = -1;
+    for (const [p,v] of byProjectPaid.entries()){
+      if (v > bestV){ bestV = v; bestP = p; }
+    }
+    topPaidP = bestP ?? "—";
+    topPaidV = fmtMoney(bestV);
+  }
+
+  $("kpi_top_count_project").textContent = topCountP;
+  $("kpi_top_count_value").textContent = topCountV;
+
+  $("kpi_top_paid_project").textContent = topPaidP;
+  $("kpi_top_paid_value").textContent = topPaidV;
+}
+
+// ============================
 // Render
 // ============================
 function render(){
   const emailRows = rowsEmailsOnly(data);
   const groupsAll = groupEmails(emailRows);
+
+  // groups respects sector/project/day filter for table + main KPIs
   const groups = filterGroups(groupsAll);
 
-  $("kpi_emails").textContent = fmtMoney(groups.length);
-  $("kpi_total_amount").textContent = fmtMoney(groups.reduce((a,g)=>a+g.total,0)); // ✅ effective totals
-  $("kpi_paid_amount").textContent = fmtMoney(groups.reduce((a,g)=>a+g.paid,0));
+  const totalEff = groups.reduce((a,g)=>a+g.total,0);
+  const paid = groups.reduce((a,g)=>a+g.paid,0);
+
+  $("kpi_emails").textContent = String(groups.length);
+  $("kpi_total_amount").textContent = fmtMoney(totalEff);
+  $("kpi_paid_amount").textContent = fmtMoney(paid);
+
+  // ✅ أعلى مشروع (على نفس الفلتر الحالي)
+  setTopProjectKPIs(groups);
 
   const sectorText = $("sector").selectedOptions[0]?.textContent || "الكل";
   const projectText = $("project").value || "الكل";
@@ -541,10 +598,11 @@ function render(){
   $("meta").textContent =
     `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText}`;
 
+  // day datalist from ALL (not just filtered)
   const daySet = uniqSorted(groupsAll.map(g=>g.day));
   $("day_list").innerHTML = daySet.map(d=>`<option value="${d}"></option>`).join("");
 
-  // chart ignoring day filter (بس ملتزم بفلتر القطاع/المشروع)
+  // chart ignores day filter but respects sector/project
   const sectorKey = $("sector").value;
   const projKey = normText($("project").value);
   const groupsNoDay = groupsAll.filter(g=>{
@@ -565,7 +623,8 @@ function render(){
         <td>${g.project}</td>
         <td>${g.time}</td>
         <td>${fmtMoney(g.total)}</td>
-        <td>${fmtMoney(g.paid)} (${pct}%)</td>
+        <td>${fmtMoney(g.paid)}</td>
+        <td>${pct}%</td>
       </tr>
     `;
   }).join("");
@@ -592,6 +651,7 @@ async function init(){
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
+  // sector->projects
   projectsBySector = new Map();
   data.forEach(r=>{
     if (!r.projectKey) return;
@@ -599,6 +659,7 @@ async function init(){
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
+  // dropdowns
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = $("sector");
   sectorSel.innerHTML =
