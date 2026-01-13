@@ -318,7 +318,7 @@ function render() {
 // Init
 // ============================
 async function init() {
-  const url = `${DATA_SOURCE.cashCsvUrl}&_ts=${Date.now()}`; // cache-buster
+  const url = DATA_SOURCE.cashCsvUrl;
   const res = await fetch(url, { cache: "no-store" });
 
   if (!res.ok) {
@@ -327,14 +327,6 @@ async function init() {
   }
 
   const text = await res.text();
-
-  // لو جوجل رجّع HTML لأي سبب
-  if (text.trim().startsWith("<!DOCTYPE") || text.includes("<html")) {
-    console.error("Received HTML instead of CSV:", text.slice(0, 200));
-    alert("اللينك رجّع صفحة HTML مش CSV — تأكد إن الرابط pub?output=csv");
-    return;
-  }
-
   data = parseCSV(text).map(normalizeRow);
 
   // Build sector -> projects mapping
