@@ -473,7 +473,7 @@ function ensureDayModal(){
               <tr>
                 <th>المشروع</th>
                 <th>عدد الإيميلات</th>
-                <th>الإجمالي (بعد الملغي)</th>
+                <th>اصافي القيمة</th>
                 <th>المصروف</th>
                 <th>المتبقي</th>
                 <th>%</th>
@@ -567,7 +567,7 @@ function openModal(group){
 
   $("modalTitle").textContent = `${group.sector} — ${group.project}`;
   $("modalSub").textContent =
-    `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي (بعد الملغي): ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
+    `اليوم: ${group.day} | الوقت: ${group.time} | صافي القيمة: ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
 
   const rows = [...group.rows];
   $("modalRows").innerHTML = rows.map((r,idx)=>{
