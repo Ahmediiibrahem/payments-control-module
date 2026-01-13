@@ -1,13 +1,13 @@
 import { HEADER_MAP } from "./schema.js";
 import { DATA_SOURCE } from "./config.js";
 
-let rawRows = [];
+let data = [];
 
 let projectsBySector = new Map();
 let sectorLabelByKey = new Map();
 let projectLabelByKey = new Map();
 
-const dayLabelToIso = new Map(); // "31-Jan" -> "2026-01-31"
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 // ============================
 // Helpers
@@ -15,14 +15,6 @@ const dayLabelToIso = new Map(); // "31-Jan" -> "2026-01-31"
 function normText(x) {
   return String(x ?? "")
     .replace(/[\u200E\u200F\u202A-\u202E]/g, "")
-    .replace(/\r?\n/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizeHeaderKey(h) {
-  return String(h ?? "")
-    .replace(/\ufeff/g, "")
     .replace(/\r?\n/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -45,6 +37,14 @@ function normalizeVendor(v) {
   const lower = t.toLowerCase();
   if (t === "-" || t === "0" || lower === "null" || lower === "none") return "";
   return t;
+}
+
+function normalizeHeaderKey(h) {
+  return String(h ?? "")
+    .replace(/\ufeff/g, "")
+    .replace(/\r?\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function parseDateSmart(s) {
@@ -71,22 +71,24 @@ function parseDateSmart(s) {
   return null;
 }
 
-function toISODate(d) {
-  if (!d) return "";
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth()+1).padStart(2,"0");
+function dayLabel(d){
+  // MMM-dd
+  const m = MONTHS[d.getUTCMonth()];
   const dd = String(d.getUTCDate()).padStart(2,"0");
-  return `${y}-${m}-${dd}`;
-}
-
-function toDayLabel(d){
-  if(!d) return "Unknown";
-  const dd = String(d.getUTCDate()).padStart(2,"0");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const m = months[d.getUTCMonth()];
   return `${dd}-${m}`;
 }
 
+function timeKeySort(t){
+  // "413-1-11" or "413" → sort by numeric prefix if possible
+  const s = normText(t);
+  const first = s.split("-")[0];
+  const n = Number(first);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// ============================
+// CSV Parse
+// ============================
 function parseCSV(text) {
   const res = Papa.parse(text, {
     header: true,
@@ -94,7 +96,6 @@ function parseCSV(text) {
     dynamicTyping: false,
     transformHeader: (h) => normalizeHeaderKey(h),
   });
-
   if (res.errors && res.errors.length) {
     console.warn("CSV parse errors (first 10):", res.errors.slice(0, 10));
   }
@@ -120,30 +121,28 @@ function normalizeRow(raw) {
   if (sectorKey) sectorLabelByKey.set(sectorKey, sectorLabel);
   if (projectKey) projectLabelByKey.set(projectKey, projectLabel);
 
-  const vendor = normalizeVendor(row.vendor);
-  const payReqDate = parseDateSmart(row.payment_request_date);
-
   return {
     sectorKey, projectKey,
     sector: sectorLabel,
     project: projectLabel,
 
+    vendor: normalizeVendor(row.vendor),
     code: normText(row.code),
-    vendor,
+    request_id: normText(row.request_id),
 
     amount_total: toNumber(row.amount_total),
     amount_paid: toNumber(row.amount_paid),
     amount_remaining: toNumber(row.amount_remaining),
 
     payment_request_date: normText(row.payment_request_date),
-    _payReqDate: payReqDate,
+    _payReqDate: parseDateSmart(row.payment_request_date),
 
-    time: normText(row.Time || row.time), // العمود الجديد
+    time: normText(row.Time || row.time), // ✅ العمود الجديد
   };
 }
 
 // ============================
-// Dropdowns
+// UI Helpers
 // ============================
 function uniqSorted(arr) {
   return Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -174,368 +173,339 @@ function rebuildProjectDropdownForSector() {
 }
 
 // ============================
-// Email grouping
+// Email logic
 // ============================
-// Email ID = projectKey + ISO day + time
-function buildEmailGroups(rows){
-  const groups = new Map(); // emailId -> {dayIso, dayLabel, sector, project, ... , lines:[]}
-
-  rows.forEach(r=>{
-    // لازم Vendor + Time عشان يبقى ايميل
-    if(!r.vendor) return;
-    if(!r.time) return;
-
-    const d = r._payReqDate;
-    const dayIso = d ? toISODate(d) : "Unknown";
-    const dayLabel = d ? toDayLabel(d) : "Unknown";
-
-    const emailId = `${r.projectKey}__${dayIso}__${r.time}`;
-
-    if(!groups.has(emailId)){
-      groups.set(emailId,{
-        emailId,
-        dayIso,
-        dayLabel,
-        sector: r.sector,
-        project: r.project,
-        sectorKey: r.sectorKey,
-        projectKey: r.projectKey,
-        time: r.time,
-        total: 0,
-        paid: 0,
-        lines:[]
-      });
-    }
-
-    const g = groups.get(emailId);
-    g.total += r.amount_total;
-    g.paid += r.amount_paid;
-    g.lines.push(r);
-  });
-
-  return Array.from(groups.values());
+function rowsEmailsOnly(rows){
+  // email row = vendor موجود + Time موجود + تاريخ طلب صرف صالح
+  return rows.filter(r => r.vendor && r.time && r._payReqDate);
 }
 
-// ============================
-// Filters
-// ============================
-function getFilters(){
+function groupEmails(rows){
+  // group by (sectorKey|projectKey|Time|dayLabel)
+  const map = new Map();
+
+  rows.forEach(r => {
+    const dlab = dayLabel(r._payReqDate);
+    const key = `${r.sectorKey}|||${r.projectKey}|||${r.time}|||${dlab}`;
+    if (!map.has(key)){
+      map.set(key, {
+        key,
+        sectorKey:r.sectorKey,
+        projectKey:r.projectKey,
+        sector:r.sector,
+        project:r.project,
+        time:r.time,
+        day:dlab,
+        date:r._payReqDate,
+        total:0,
+        paid:0,
+        rows:[]
+      });
+    }
+    const g = map.get(key);
+    g.total += r.amount_total;
+    g.paid += r.amount_paid;
+    g.rows.push(r);
+  });
+
+  return Array.from(map.values());
+}
+
+function filterEmailGroups(groups){
   const sectorKey = document.getElementById("sector").value;
   const projectLabel = document.getElementById("project").value;
   const projectKey = normText(projectLabel);
 
   const dayInput = normText(document.getElementById("day_key").value);
-  const dayIso = dayLabelToIso.get(dayInput) || ""; // لو كتب label صح
 
-  return { sectorKey, projectKey, dayIso };
-}
+  return groups.filter(g => {
+    if (sectorKey && g.sectorKey !== sectorKey) return false;
+    if (projectKey && g.projectKey !== projectKey) return false;
 
-function filterEmailGroups(groups){
-  const { sectorKey, projectKey, dayIso } = getFilters();
-
-  return groups.filter(g=>{
-    if(sectorKey && g.sectorKey !== sectorKey) return false;
-    if(projectKey && g.projectKey !== projectKey) return false;
-    if(dayIso && g.dayIso !== dayIso) return false;
+    if (dayInput){
+      // allow partial typing like "31"
+      if (!g.day.toLowerCase().includes(dayInput.toLowerCase())) return false;
+    }
     return true;
   });
 }
 
 // ============================
-// Render: KPIs + Chart + Tables + Modal
+// Render
 // ============================
 function render(){
-  const allGroups = buildEmailGroups(rawRows);
-  const groups = filterEmailGroups(allGroups);
+  const emailRows = rowsEmailsOnly(data);
+  const groupsAll = groupEmails(emailRows);
 
-  // KPIs
+  const groups = filterEmailGroups(groupsAll);
+
+  // KPI
   const emailsCount = groups.length;
   const totalAmount = groups.reduce((a,g)=>a+g.total,0);
   const paidAmount = groups.reduce((a,g)=>a+g.paid,0);
 
-  document.getElementById("kpi_emails").textContent = emailsCount.toLocaleString("en-US");
+  document.getElementById("kpi_emails").textContent = fmtMoney(emailsCount);
   document.getElementById("kpi_total_amount").textContent = fmtMoney(totalAmount);
   document.getElementById("kpi_paid_amount").textContent = fmtMoney(paidAmount);
 
   // Top projects
-  const byProj = new Map(); // project -> {count,total,paid}
+  const byProjectCount = new Map();
+  const byProjectPaid = new Map();
+
   groups.forEach(g=>{
-    const k = g.project || "(بدون مشروع)";
-    if(!byProj.has(k)) byProj.set(k,{count:0,total:0,paid:0});
-    const s = byProj.get(k);
-    s.count += 1;
-    s.total += g.total;
-    s.paid += g.paid;
+    const p = g.project || "(بدون مشروع)";
+    byProjectCount.set(p, (byProjectCount.get(p)||0)+1);
+    byProjectPaid.set(p, (byProjectPaid.get(p)||0)+g.paid);
   });
 
-  let topCount = {p:"—", v:0};
-  let topPaid = {p:"—", v:0};
-  byProj.forEach((v,p)=>{
-    if(v.count > topCount.v){ topCount={p, v:v.count}; }
-    if(v.paid > topPaid.v){ topPaid={p, v:v.paid}; }
-  });
+  let topCountP="—", topCountV=0;
+  byProjectCount.forEach((v,k)=>{ if(v>topCountV){topCountV=v; topCountP=k;} });
 
-  document.getElementById("kpi_top_count_project").textContent = topCount.p;
-  document.getElementById("kpi_top_count_value").textContent = topCount.v.toLocaleString("en-US");
-  document.getElementById("kpi_top_paid_project").textContent = topPaid.p;
-  document.getElementById("kpi_top_paid_value").textContent = fmtMoney(topPaid.v);
+  let topPaidP="—", topPaidV=0;
+  byProjectPaid.forEach((v,k)=>{ if(v>topPaidV){topPaidV=v; topPaidP=k;} });
+
+  document.getElementById("kpi_top_count_project").textContent = topCountP;
+  document.getElementById("kpi_top_count_value").textContent = fmtMoney(topCountV);
+
+  document.getElementById("kpi_top_paid_project").textContent = topPaidP;
+  document.getElementById("kpi_top_paid_value").textContent = fmtMoney(topPaidV);
 
   // Meta
-  const sectorText = document.getElementById("sector").selectedOptions[0]?.textContent || "الكل";
-  const projectText = document.getElementById("project").value || "الكل";
-  const dayText = document.getElementById("day_key").value || "الكل";
-  document.getElementById("meta").textContent =
-    `المعروض: ${emailsCount} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText}`;
+  const sectorSelText = document.getElementById("sector").selectedOptions[0]?.textContent || "الكل";
+  const projectSel = document.getElementById("project").value || "الكل";
+  const daySel = normText(document.getElementById("day_key").value) || "الكل";
 
-  // Chart (آخر 15 يوم من كل الداتا بعد sector/project فقط)
-  // عشان التشارت يبقى له معنى حتى لو اليوم فلتر
-  const { sectorKey, projectKey } = getFilters();
-  const baseForChart = allGroups.filter(g=>{
-    if(sectorKey && g.sectorKey !== sectorKey) return false;
-    if(projectKey && g.projectKey !== projectKey) return false;
+  document.getElementById("meta").textContent =
+    `المعروض: ${emailsCount} | قطاع: ${sectorSelText} | مشروع: ${projectSel} | اليوم: ${daySel}`;
+
+  // Build day list datalist (based on current sector/project selection, not day filter)
+  const groupsNoDay = groupsAll.filter(g=>{
+    const sectorKey = document.getElementById("sector").value;
+    const projectKey = normText(document.getElementById("project").value);
+    if (sectorKey && g.sectorKey !== sectorKey) return false;
+    if (projectKey && g.projectKey !== projectKey) return false;
     return true;
   });
 
-  // اجمع بالقيم حسب اليوم
-  const dayAgg = new Map(); // dayIso -> {dayIso,label,total,paid}
-  baseForChart.forEach(g=>{
-    const k = g.dayIso || "Unknown";
-    if(!dayAgg.has(k)) dayAgg.set(k,{dayIso:k,label:g.dayLabel,total:0,paid:0});
-    const a = dayAgg.get(k);
-    a.total += g.total;
-    a.paid += g.paid;
-  });
+  const daySet = uniqSorted(groupsNoDay.map(g=>g.day));
+  const dl = document.getElementById("day_list");
+  dl.innerHTML = daySet.map(d=>`<option value="${d}"></option>`).join("");
 
-  const daysSorted = Array.from(dayAgg.values())
-    .filter(x=>x.dayIso !== "Unknown")
-    .sort((a,b)=>a.dayIso.localeCompare(b.dayIso));
+  // Chart last 15 days (by total and paid)
+  renderChart(groupsNoDay);
 
-  const last15 = daysSorted.slice(-15);
-
-  const chart = document.getElementById("chart");
-  chart.innerHTML = "";
-
-  const maxTotal = Math.max(1, ...last15.map(d=>d.total));
-
-  last15.forEach(d=>{
-    const totalH = Math.round((d.total / maxTotal) * 100);
-    const paidPct = d.total > 0 ? Math.round((d.paid / d.total) * 100) : 0;
-
-    const wrap = document.createElement("div");
-    wrap.className = "chart-group";
-
-    const bars = document.createElement("div");
-    bars.className = "chart-bars";
-
-    const stack = document.createElement("div");
-    stack.className = "bar-stack";
-    stack.style.height = `${totalH}%`;
-
-    const topVal = document.createElement("div");
-    topVal.className = "bar-top-value";
-    topVal.textContent = fmtMoney(d.total);
-
-    const paidDiv = document.createElement("div");
-    paidDiv.className = "bar-paid";
-    paidDiv.style.height = `${paidPct}%`;
-
-    const pct = document.createElement("div");
-    pct.className = "bar-percent";
-    pct.textContent = `${paidPct}%`;
-
-    paidDiv.appendChild(pct);
-    stack.appendChild(topVal);
-    stack.appendChild(paidDiv);
-
-    bars.appendChild(stack);
-
-    const dayLbl = document.createElement("div");
-    dayLbl.className = "chart-day";
-    dayLbl.textContent = d.label;
-
-    wrap.appendChild(bars);
-    wrap.appendChild(dayLbl);
-    chart.appendChild(wrap);
-  });
-
-  // Detail table (الأحدث للأقدم)
-  const detailRows = document.getElementById("detail_rows");
+  // Details table (الأحدث للأقدم)
+  const detailBody = document.getElementById("detail_rows");
   const sorted = [...groups].sort((a,b)=>{
-    // day desc, time desc (محاولة رقمية)
-    if(a.dayIso !== b.dayIso) return (b.dayIso || "").localeCompare(a.dayIso || "");
-    const at = a.time || "", bt = b.time || "";
-    return bt.localeCompare(at);
+    const dt = b.date.getTime() - a.date.getTime();
+    if (dt !== 0) return dt;
+    return timeKeySort(b.time) - timeKeySort(a.time);
   });
 
-  detailRows.innerHTML = sorted.map(g=>`
-    <tr class="clickable-row" data-email="${g.emailId}">
-      <td>${g.dayLabel}</td>
+  detailBody.innerHTML = sorted.map(g=>`
+    <tr class="clickable-row" data-key="${g.key}">
+      <td>${g.day}</td>
       <td>${g.sector}</td>
       <td>${g.project}</td>
-      <td>${g.time}</td>
+      <td class="mono">${g.time}</td>
       <td>${fmtMoney(g.total)}</td>
       <td>${fmtMoney(g.paid)}</td>
     </tr>
   `).join("");
 
-  // Summary (اختياري)
-  const summaryRows = document.getElementById("summary_rows");
-  if(summaryRows){
-    const sumMap = new Map(); // dayIso|project -> agg
-    groups.forEach(g=>{
-      const k = `${g.dayIso}__${g.projectKey}`;
-      if(!sumMap.has(k)){
-        sumMap.set(k,{
-          dayIso:g.dayIso, dayLabel:g.dayLabel,
-          sector:g.sector, project:g.project,
-          emails:0, total:0, paid:0
-        });
-      }
-      const s = sumMap.get(k);
-      s.emails += 1;
-      s.total += g.total;
-      s.paid += g.paid;
+  // Summary table (اختياري)
+  const summaryBody = document.getElementById("summary_rows");
+  const summaryMap = new Map(); // day|sector|project
+  groups.forEach(g=>{
+    const k = `${g.day}|||${g.sector}|||${g.project}`;
+    if(!summaryMap.has(k)){
+      summaryMap.set(k,{day:g.day, sector:g.sector, project:g.project, emails:0, total:0, paid:0});
+    }
+    const s = summaryMap.get(k);
+    s.emails += 1;
+    s.total += g.total;
+    s.paid += g.paid;
+  });
+
+  const summaryArr = Array.from(summaryMap.values()).sort((a,b)=>{
+    // sort by day desc (approx: month/day string) — good enough for last window
+    return b.day.localeCompare(a.day);
+  });
+
+  summaryBody.innerHTML = summaryArr.map(s=>`
+    <tr>
+      <td>${s.day}</td>
+      <td>${s.sector}</td>
+      <td>${s.project}</td>
+      <td>${fmtMoney(s.emails)}</td>
+      <td>${fmtMoney(s.total)}</td>
+      <td>${fmtMoney(s.paid)}</td>
+    </tr>
+  `).join("");
+
+  // Click handler to open modal
+  detailBody.querySelectorAll("tr.clickable-row").forEach(tr=>{
+    tr.addEventListener("click", ()=>{
+      const key = tr.getAttribute("data-key");
+      const g = groupsAll.find(x=>x.key===key);
+      if (g) openModal(g);
     });
-
-    const sums = Array.from(sumMap.values()).sort((a,b)=>{
-      if(a.dayIso !== b.dayIso) return (b.dayIso||"").localeCompare(a.dayIso||"");
-      return (a.project||"").localeCompare(b.project||"");
-    });
-
-    summaryRows.innerHTML = sums.map(s=>`
-      <tr>
-        <td>${s.dayLabel}</td>
-        <td>${s.sector}</td>
-        <td>${s.project}</td>
-        <td>${s.emails}</td>
-        <td>${fmtMoney(s.total)}</td>
-        <td>${fmtMoney(s.paid)}</td>
-      </tr>
-    `).join("");
-  }
-
-  // click row -> modal
-  bindModalHandlers(sorted);
+  });
 }
 
-function bindModalHandlers(groupsSorted){
+function renderChart(groupsNoDay){
+  const chart = document.getElementById("chart");
+  const hint = document.getElementById("chart_hint");
+  const stats = document.getElementById("selected_day_stats");
+
+  if (!groupsNoDay.length){
+    chart.innerHTML = "";
+    hint.textContent = "";
+    stats.textContent = "";
+    return;
+  }
+
+  // find max date
+  const maxDate = groupsNoDay.reduce((m,g)=>Math.max(m,g.date.getTime()), 0);
+  const end = new Date(maxDate);
+  const start = new Date(end.getTime() - 14*24*60*60*1000);
+
+  // aggregate by dayLabel
+  const days = [];
+  for(let i=0;i<15;i++){
+    const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+    d.setUTCDate(d.getUTCDate()+i);
+    days.push(d);
+  }
+
+  const agg = new Map(); // dayLabel -> {total,paid}
+  days.forEach(d=> agg.set(dayLabel(d), {total:0, paid:0}));
+
+  groupsNoDay.forEach(g=>{
+    const dl = g.day;
+    if (agg.has(dl)){
+      const a = agg.get(dl);
+      a.total += g.total;
+      a.paid += g.paid;
+    }
+  });
+
+  const maxTotal = Math.max(...Array.from(agg.values()).map(x=>x.total), 1);
+
+  hint.textContent = ""; // requested remove range text
+
+  chart.innerHTML = days.map(d=>{
+    const dl = dayLabel(d);
+    const a = agg.get(dl);
+    const hTotal = (a.total / maxTotal) * 100;
+    const pct = a.total > 0 ? Math.round((a.paid / a.total) * 100) : 0;
+
+    // paid height inside bar is pct of bar height
+    const paidHeight = a.total > 0 ? pct : 0;
+
+    return `
+      <div class="chart-group">
+        <div class="chart-bars">
+          <div class="bar-stack" style="height:${hTotal}%; min-height:${a.total>0? '8px':'0'};">
+            <div class="bar-top-value">${a.total>0 ? fmtMoney(a.total) : ""}</div>
+            <div class="bar-paid" style="height:${paidHeight}%; ${a.total===0?'display:none;':''}">
+              <div class="bar-percent">${a.total>0 ? (pct+"%") : ""}</div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-day">${dl}</div>
+      </div>
+    `;
+  }).join("");
+
+  stats.textContent = ""; // هنستخدمه لاحقاً لو عملنا اختيار يوم
+}
+
+// ============================
+// Modal
+// ============================
+function openModal(group){
   const modal = document.getElementById("emailModal");
   const closeBtn = document.getElementById("modalClose");
-  const modalTitle = document.getElementById("modalTitle");
-  const modalSub = document.getElementById("modalSub");
-  const modalRows = document.getElementById("modalRows");
 
-  const map = new Map(groupsSorted.map(g=>[g.emailId,g]));
+  const title = document.getElementById("modalTitle");
+  const sub = document.getElementById("modalSub");
+  const body = document.getElementById("modalRows");
 
-  document.querySelectorAll("#detail_rows tr[data-email]").forEach(tr=>{
-    tr.addEventListener("click", ()=>{
-      const id = tr.getAttribute("data-email");
-      const g = map.get(id);
-      if(!g) return;
+  title.textContent = `${group.sector} — ${group.project}`;
+  sub.textContent = `اليوم: ${group.day} | Time: ${group.time} | إجمالي: ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)}`;
 
-      modalTitle.textContent = `${g.sector} — ${g.project}`;
-      modalSub.textContent = `إجمالي قيمة الإيميل: ${fmtMoney(g.total)} | المصروف: ${fmtMoney(g.paid)} | Time: ${g.time}`;
+  const rows = [...group.rows].sort((a,b)=>b.amount_total-a.amount_total);
 
-      const lines = [...g.lines].sort((a,b)=>{
-        const av = a.vendor.localeCompare(b.vendor);
-        if(av !== 0) return av;
-        return b.amount_total - a.amount_total;
-      });
+  body.innerHTML = rows.map((r,idx)=>`
+    <tr>
+      <td>${idx+1}</td>
+      <td>${r.code}</td>
+      <td>${r.vendor}</td>
+      <td>${fmtMoney(r.amount_total)}</td>
+      <td>${fmtMoney(r.amount_paid)}</td>
+      <td>${fmtMoney(r.amount_remaining)}</td>
+    </tr>
+  `).join("");
 
-      modalRows.innerHTML = lines.map((r,i)=>`
-        <tr>
-          <td>${i+1}</td>
-          <td>${r.code}</td>
-          <td>${r.vendor}</td>
-          <td>${fmtMoney(r.amount_total)}</td>
-          <td>${fmtMoney(r.amount_paid)}</td>
-          <td>${fmtMoney(r.amount_remaining)}</td>
-        </tr>
-      `).join("");
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden","false");
 
-      modal.classList.add("show");
-      modal.setAttribute("aria-hidden","false");
-    });
-  });
-
-  const hide = ()=>{
+  const onClose = ()=>{
     modal.classList.remove("show");
     modal.setAttribute("aria-hidden","true");
+    closeBtn.removeEventListener("click", onClose);
+    modal.removeEventListener("click", onBackdrop);
+    document.removeEventListener("keydown", onEsc);
   };
 
-  closeBtn?.addEventListener("click", hide);
-  modal?.addEventListener("click", (e)=>{
-    if(e.target === modal) hide();
-  });
+  const onBackdrop = (e)=>{
+    if (e.target === modal) onClose();
+  };
 
-  document.addEventListener("keydown",(e)=>{
-    if(e.key === "Escape") hide();
-  });
+  const onEsc = (e)=>{
+    if (e.key === "Escape") onClose();
+  };
+
+  closeBtn.addEventListener("click", onClose);
+  modal.addEventListener("click", onBackdrop);
+  document.addEventListener("keydown", onEsc);
 }
 
 // ============================
 // Init
 // ============================
 async function init(){
-  const url = `${DATA_SOURCE.cashCsvUrl}&_ts=${Date.now()}`;
-  const res = await fetch(url, { cache: "no-store" });
+  const url = DATA_SOURCE.cashCsvUrl;
+  const res = await fetch(url, { cache:"no-store" });
 
   if(!res.ok){
-    alert("مش قادر أقرأ الداتا من Google Sheets — تأكد إن الشيت Published");
+    alert("مش قادر أقرأ الداتا من Google Sheets — تأكد إن الشيت Published و الرابط صحيح");
     return;
   }
 
   const text = await res.text();
-  if (text.trim().startsWith("<!DOCTYPE") || text.includes("<html")) {
-    console.error("Received HTML instead of CSV:", text.slice(0, 200));
-    alert("اللينك رجّع HTML مش CSV — تأكد إن الرابط pub?output=csv");
-    return;
-  }
+  data = parseCSV(text).map(normalizeRow);
 
-  rawRows = parseCSV(text).map(normalizeRow);
-
-  // Build sector->projects
+  // build sector -> projects mapping
   projectsBySector = new Map();
-  rawRows.forEach(r=>{
-    if(!r.projectKey) return;
-    if(!projectsBySector.has(r.sectorKey)) projectsBySector.set(r.sectorKey, new Set());
+  data.forEach(r=>{
+    if (!r.projectKey) return;
+    if (!projectsBySector.has(r.sectorKey)) projectsBySector.set(r.sectorKey, new Set());
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
-  // Sector dropdown
+  // sector dropdown
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = document.getElementById("sector");
   sectorSel.innerHTML =
     `<option value="">الكل</option>` +
     sectorKeys.map(sk => `<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
-  // Project dropdown initially all
+  // project dropdown initially all
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
 
-  // Build day list from payment_request_date (only rows with Time)
-  const days = new Map(); // iso -> label
-  rawRows.forEach(r=>{
-    if(!r.time) return;
-    if(!r._payReqDate) return;
-    const iso = toISODate(r._payReqDate);
-    const label = toDayLabel(r._payReqDate);
-    days.set(iso, label);
-  });
-
-  const sortedIso = Array.from(days.keys()).sort((a,b)=>a.localeCompare(b));
-  const datalist = document.getElementById("day_list");
-  datalist.innerHTML = "";
-
-  dayLabelToIso.clear();
-  sortedIso.forEach(iso=>{
-    const label = days.get(iso);
-    dayLabelToIso.set(label, iso);
-    const opt = document.createElement("option");
-    opt.value = label;
-    datalist.appendChild(opt);
-  });
-
-  // Events
+  // events
   document.getElementById("sector").addEventListener("change", ()=>{
     rebuildProjectDropdownForSector();
     render();
@@ -547,13 +517,14 @@ async function init(){
     el.addEventListener("input", render);
   });
 
-  document.getElementById("clearBtn")?.addEventListener("click", ()=>{
+  document.getElementById("clearBtn").addEventListener("click", ()=>{
     document.getElementById("sector").value = "";
     rebuildProjectDropdownForSector();
     document.getElementById("day_key").value = "";
     render();
   });
 
+  // first render
   render();
 }
 
