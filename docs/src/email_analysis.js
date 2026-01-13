@@ -83,7 +83,9 @@ function parseDateSmart(s) {
   if (m) {
     const dd = +m[1], mm = +m[2], yy = +m[3];
     const d = new Date(Date.UTC(yy, mm - 1, dd));
-    return isNaN(d.getTime()) ? null : d;
+    if (isNaN(d.getTime())) return null;
+    if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return null;
+    return d;
   }
 
   // dd/mm/yyyy
@@ -96,6 +98,7 @@ function parseDateSmart(s) {
     return d;
   }
 
+  // fallback smart M/D/YYYY
   m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
   if (m) {
     const a = +m[1], b = +m[2], y = +m[3];
@@ -132,12 +135,11 @@ function timeToMinutes(t){
   return hh * 60 + mm;
 }
 
-// ✅ ddmmyyyy OR dd/mm/yyyy -> Date UTC
+// ddmmyyyy OR dd/mm/yyyy -> Date UTC
 function parseUserDateInput(txt){
   const t = normText(txt);
   if (!t) return null;
 
-  // If formatted dd/mm/yyyy
   const m1 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
   if (m1){
     const dd = +m1[1], mm = +m1[2], yy = +m1[3];
@@ -147,7 +149,6 @@ function parseUserDateInput(txt){
     return d;
   }
 
-  // digits only ddmmyyyy
   const digits = t.replace(/\D/g, "");
   if (digits.length === 8){
     const dd = +digits.slice(0,2);
@@ -177,10 +178,9 @@ function inRangeUTC(d, from, to){
   return true;
 }
 
-// ✅ Auto format: 12012026 -> 12/01/2026 أثناء الكتابة
+// Auto format: 12012026 -> 12/01/2026 أثناء الكتابة
 function autoSlashDateInput(el){
   if (!el) return;
-
   const raw = el.value;
   const digits = raw.replace(/\D/g, "").slice(0, 8);
 
@@ -192,8 +192,6 @@ function autoSlashDateInput(el){
   } else {
     out = digits.slice(0,2) + "/" + digits.slice(2,4) + "/" + digits.slice(4);
   }
-
-  // keep caret at end (best UX for numeric typing)
   el.value = out;
 }
 
@@ -447,7 +445,7 @@ function filterGroups(groups){
 }
 
 // ============================
-// Day Modal (Click on chart bar) - Summary per project + count
+// Day Modal (Click on chart bar)
 // ============================
 function ensureDayModal(){
   let modal = document.getElementById("dayModal");
@@ -558,6 +556,55 @@ function openDayModal(dayLabelStr, groupsScope){
 }
 
 // ============================
+// ✅ Email Modal (per email/group) — رجّعناه هنا
+// ============================
+function openModal(group){
+  const modal = $("emailModal");
+  if (!modal) return;
+
+  const remain = Math.max(0, group.total - group.paid);
+  const pct = group.total > 0 ? clamp(Math.round((group.paid / group.total) * 100), 0, 100) : 0;
+
+  $("modalTitle").textContent = `${group.sector} — ${group.project}`;
+  $("modalSub").textContent =
+    `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي (بعد الملغي): ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
+
+  const rows = [...group.rows];
+  $("modalRows").innerHTML = rows.map((r,idx)=>{
+    const eff = r.effective_total;
+    const paid = r.amount_paid;
+    const rem = Math.max(0, eff - paid);
+    return `
+      <tr>
+        <td>${idx+1}</td>
+        <td>${escHtml(r.code)}</td>
+        <td>${escHtml(r.vendor)}</td>
+        <td>${fmtMoney(eff)}</td>
+        <td>${fmtMoney(paid)}</td>
+        <td>${fmtMoney(rem)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden","false");
+
+  const close = ()=>{
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden","true");
+    $("modalClose").removeEventListener("click", close);
+    modal.removeEventListener("click", onBackdrop);
+    document.removeEventListener("keydown", onEsc);
+  };
+  const onBackdrop = (e)=>{ if(e.target===modal) close(); };
+  const onEsc = (e)=>{ if(e.key==="Escape") close(); };
+
+  $("modalClose").addEventListener("click", close);
+  modal.addEventListener("click", onBackdrop);
+  document.addEventListener("keydown", onEsc);
+}
+
+// ============================
 // Chart
 // ============================
 function renderChart(groupsScope){
@@ -604,7 +651,6 @@ function renderChart(groupsScope){
         <div class="chart-bars" title="${has ? `Total: ${fmtMoney(a.total)} | Paid: ${fmtMoney(a.paid)} | ${pct}%` : "No emails"}">
           <div class="bar-stack" style="height:${stackHeight}%; overflow:visible;">
             <div class="bar-top-value">${has ? fmtMoney(a.total) : ""}</div>
-
             ${has ? `
               <div class="bar-paid" style="height:${pct}%; ${paidExtraStyle}">
                 <div class="bar-percent">${pct}%</div>
@@ -695,6 +741,7 @@ function render(){
 
   renderChart(groupsAll);
 
+  // sort: newest day first, within day by time (AM then PM)
   const sorted = [...groups].sort((a,b)=>{
     const d = b.date.getTime() - a.date.getTime();
     if (d !== 0) return d;
@@ -719,12 +766,12 @@ function render(){
     `;
   }).join("");
 
+  // ✅ هنا التعديل الأساسي: ننادي openModal مباشرة
   $("detail_rows").querySelectorAll("tr").forEach(tr=>{
     tr.addEventListener("click", ()=>{
       const key = tr.getAttribute("data-key");
       const g = groups.find(x=>x.key===key) || groupsAll.find(x=>x.key===key);
-      // open modal (reuse existing modal from previous version if you still have it)
-      if (g && typeof window.openModal === "function") window.openModal(g);
+      if (g) openModal(g);
     });
   });
 }
@@ -762,7 +809,7 @@ async function init(){
   $("date_to_btn").addEventListener("click", ()=> $("date_to_pick").showPicker ? $("date_to_pick").showPicker() : $("date_to_pick").click());
 
   $("date_from_pick").addEventListener("change", (e)=>{
-    const v = e.target.value; // yyyy-mm-dd
+    const v = e.target.value;
     const d = parseDateSmart(v);
     if (d) $("date_from_txt").value = formatIsoDate(d);
     render();
@@ -774,7 +821,7 @@ async function init(){
     render();
   });
 
-  // ✅ Auto slash on typing
+  // Auto slash on typing
   $("date_from_txt").addEventListener("input", (e)=>{
     autoSlashDateInput(e.target);
     render();
