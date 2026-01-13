@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=34">
+  <link rel="stylesheet" href="./assets/css/main.css?v=35">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -70,9 +70,31 @@
             <select id="project"></select>
           </label>
 
-          <label>اليوم:
-            <input id="day_key" list="day_list" placeholder="اكتب يوم مثل 31-Jan..." />
-            <datalist id="day_list"></datalist>
+          <label>الحالة:
+            <select id="status">
+              <option value="">الكل</option>
+              <option value="1">طلب صرف بدون إعتماد ولم يحول</option>
+              <option value="2">طلب صرف معتمد ولم يحول</option>
+              <option value="3">طلب صرف معتمد وتم تحويلة</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-row">
+          <label>من (ddmmyyyy):
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input id="date_from_txt" inputmode="numeric" placeholder="مثال: 12012025" />
+              <button id="date_from_btn" type="button" title="اختيار من الكاليندر">📅</button>
+              <input id="date_from_pick" type="date" style="display:none;">
+            </div>
+          </label>
+
+          <label>إلى (ddmmyyyy):
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025" />
+              <button id="date_to_btn" type="button" title="اختيار من الكاليندر">📅</button>
+              <input id="date_to_pick" type="date" style="display:none;">
+            </div>
           </label>
 
           <div class="btn-row">
@@ -105,6 +127,7 @@
               <th>الوقت</th>
               <th>قيمة طلبات الصرف</th>
               <th>قيمة المصروف</th>
+              <th>المتبقي</th>
               <th>%</th>
             </tr>
           </thead>
@@ -146,7 +169,6 @@
 
   </div>
 
-  <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script type="module" src="./src/email_analysis.js"></script>
 </body>
