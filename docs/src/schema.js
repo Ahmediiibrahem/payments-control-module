@@ -25,8 +25,14 @@ export const HEADER_MAP = {
   "تاريخ التعميد": "approval_date",
   "تاريخ الصرف": "payment_date",
 
-  // ✅ new column for email unique id
+  // Old (keep for backward compatibility)
   "Time": "time_code",
   "time": "time_code",
   "TIME": "time_code",
+
+  // ✅ NEW: human readable time
+  "Exacttime": "exact_time",
+  "ExactTime": "exact_time",
+  "EXACTTIME": "exact_time",
+  "exacttime": "exact_time",
 };
