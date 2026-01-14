@@ -35,4 +35,10 @@ export const HEADER_MAP = {
   "ExactTime": "exact_time",
   "EXACTTIME": "exact_time",
   "exacttime": "exact_time",
+
+  "RegionCode": "region_code",
+  "RegionName": "region_name",
+  "كود المنطقة": "region_code",
+  "اسم المنطقة": "region_name",
+  
 };
