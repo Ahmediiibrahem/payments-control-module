@@ -186,8 +186,12 @@ function normalizeRow(raw){
   // "تم عمل إيميل" = vendor + exactTime + payment_request_date
   const hasEmail = !!vendor && !!exactTime && hasValidDate(payDate);
 
-  // OPTIONAL FIELDS (حسب الشيت لو موجودة)
-  const reqNo = normText(row.request_no || row.request_number || row.req_no || row["requestno"] || row["RequestNo"] || "");
+  // ✅ Columns confirmed by you
+  const requestId = normText(row.request_id || row.requestId || row.requestID || "");
+  const sourceRequestDate = parseDateSmart(row.source_request_date);
+  const sourceRequestDateTxt = hasValidDate(sourceRequestDate) ? dayKey(sourceRequestDate) : (normText(row.source_request_date) || "—");
+
+  // Optional: code if exists (won't break if missing)
   const code = normText(row.code || row.vendor_code || row.supplier_code || row["VendorCode"] || row["الكود"] || "");
 
   return {
@@ -196,7 +200,11 @@ function normalizeRow(raw){
 
     vendor,
     code,
-    reqNo,
+
+    requestId,
+    sourceRequestDate,
+    sourceRequestDateTxt,
+
     exactTime,
 
     payDate, apprDate, paidDate,
@@ -255,65 +263,44 @@ function maxDateInView(){
   return ms ? new Date(ms) : null;
 }
 
-// ===================== Modal history (Back)
+// ===================== Modal history (Back) — FIXED
 let modalHistory = [];
 let modalIsOpen = false;
 
-function captureModalState(){
-  return {
-    title: $("insModalTitle").textContent,
-    sub: $("insModalSub").textContent,
-    tabsHtml: $("insTabs").innerHTML,
-    tabsVisible: $("insTabs").style.display,
-    theadHtml: $("insThead").innerHTML,
-    tbodyHtml: $("insTbody").innerHTML,
-    // we rebind click handlers per render (so we store a renderer function below instead for complex cases)
-    // In this project, we will store a reRender callback when opening modal.
-    reRender: null
-  };
-}
 function setBackButton(){
   const backBtn = $("insModalBack");
   backBtn.style.display = modalHistory.length ? "inline-flex" : "none";
 }
+
 function bindModalBack(){
   const backBtn = $("insModalBack");
   backBtn.onclick = ()=>{
     if (!modalHistory.length) return;
     const prev = modalHistory.pop();
-    if (prev.reRender){
+    // ✅ Always re-render using stored function => handlers restored
+    if (typeof prev.reRender === "function"){
       prev.reRender();
-    }else{
-      $("insModalTitle").textContent = prev.title;
-      $("insModalSub").textContent = prev.sub;
-      $("insTabs").innerHTML = prev.tabsHtml;
-      $("insTabs").style.display = prev.tabsVisible;
-      $("insThead").innerHTML = prev.theadHtml;
-      $("insTbody").innerHTML = prev.tbodyHtml;
-      $("insTbody").onclick = null;
     }
     setBackButton();
   };
 }
 
-// ===================== Modal (open + optional row click)
+// openModal now expects reRender to be stored in history snapshot
 function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRowClick = null, pushHistory = false, reRender = null }){
   const modal = $("insModal");
   const tabsEl = $("insTabs");
   const thead = $("insThead");
   const tbody = $("insTbody");
 
+  // push current view as history before changing view
   if (pushHistory && modalIsOpen){
-    const snap = captureModalState();
-    snap.reRender = reRender; // optional
-    modalHistory.push(snap);
+    modalHistory.push({ reRender }); // ✅ store renderer of previous screen
   }
   setBackButton();
 
   $("insModalTitle").textContent = title || "—";
   $("insModalSub").textContent = sub || "";
 
-  // cleanup old handler
   tbody.onclick = null;
 
   const renderTable = (cols, rws, clickHandler)=>{
@@ -332,21 +319,31 @@ function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRow
 
   if (tabs && tabs.length){
     tabsEl.style.display = "flex";
-    tabsEl.innerHTML = tabs.map((t,i)=>`<button class="nav-btn" data-idx="${i}" style="opacity:.9;">${t.label}</button>`).join("");
+    tabsEl.classList.add("modal-tabs");
+    tabsEl.innerHTML = tabs.map((t,i)=>`<button class="tab-btn" data-idx="${i}">${t.label}</button>`).join("");
 
     // default tab 0
     renderTable(tabs[0].columns, tabs[0].rowsHtml, tabs[0].onRowClick || null);
 
     tabsEl.querySelectorAll("button").forEach(btn=>{
       btn.addEventListener("click", ()=>{
+        tabsEl.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+
         const idx = +btn.getAttribute("data-idx");
         const t = tabs[idx];
         renderTable(t.columns, t.rowsHtml, t.onRowClick || null);
       });
     });
+
+    // set active on first
+    const first = tabsEl.querySelector("button");
+    if (first) first.classList.add("active");
+
   }else{
     tabsEl.style.display = "none";
     tabsEl.innerHTML = "";
+    tabsEl.classList.remove("modal-tabs");
     renderTable(columns, rowsHtml, onRowClick || null);
   }
 
@@ -374,8 +371,8 @@ function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRow
   document.addEventListener("keydown", onEsc);
 }
 
-// ===================== Drill-down popup for ONE email group
-function openEmailDetailsPopup({ title, sub, items }){
+// ===================== Drill-down for ONE email group
+function openEmailDetailsPopup({ title, sub, items, backRender }){
   const sorted = items.slice().sort((a,b)=>{
     const va = (a.vendor||"").localeCompare(b.vendor||"");
     if (va !== 0) return va;
@@ -387,7 +384,9 @@ function openEmailDetailsPopup({ title, sub, items }){
     return `
       <tr>
         <td>${i+1}</td>
-        <td>${escHtml(r.reqNo || "—")}</td>
+        <td>${escHtml(r.project || "—")}</td>
+        <td>${escHtml(r.sourceRequestDateTxt || "—")}</td>
+        <td>${escHtml(r.requestId || "—")}</td>
         <td>${escHtml(r.code || "—")}</td>
         <td>${escHtml(r.vendor || "—")}</td>
         <td>${fmtMoney(r.effective_total)}</td>
@@ -401,13 +400,14 @@ function openEmailDetailsPopup({ title, sub, items }){
   openModal({
     title,
     sub,
-    columns: ["م","رقم الطلب","الكود","اسم المورد","القيمة","المنصرف","المتبقي","%"],
+    columns: ["م","المشروع","تاريخ الطلب","رقم الطلب","الكود","اسم المورد","القيمة","المنصرف","المتبقي","%"],
     rowsHtml,
-    pushHistory: true
+    pushHistory: true,
+    reRender: backRender
   });
 }
 
-// ===================== Executive Summary + SLA
+// ===================== Executive Summary + SLA (unchanged)
 function renderExecutive(){
   const total = view.reduce((s,r)=>s+r.effective_total,0);
   const paidAll = view.reduce((s,r)=>s+r.amount_paid,0);
@@ -420,11 +420,10 @@ function renderExecutive(){
   const asof = maxDateInView();
   $("asof").textContent = asof ? `As of: ${dayKey(asof)}` : "As of: —";
 
-  // SLA base = only rows with payDate + paidDate + amount_paid>0
   const completed = view.filter(r=>hasValidDate(r.payDate) && hasValidDate(r.paidDate) && r.amount_paid > 0);
 
-  let basePaid = 0;  // إجمالي (Base)
-  let okPaid = 0;    // المنصرف خلال <= 5 أيام
+  let basePaid = 0;
+  let okPaid = 0;
 
   completed.forEach(r=>{
     const d = daysBetween(r.payDate, r.paidDate);
@@ -446,7 +445,6 @@ function renderExecutive(){
 
 // ===================== Cash Exposure
 function buildEmailGroups(list){
-  // returns Map(ekey -> group)
   const groups = new Map();
   list.forEach(r=>{
     const day = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
@@ -467,19 +465,24 @@ function renderExposure(){
   const expRemain = { "1":0, "2":0, "3":0 };
   const expEmailCount = { "1":0, "2":0, "3":0 };
 
-  // First 3 cards: remaining + UNIQUE email count
   ["1","2","3"].forEach(st=>{
     const list = view.filter(r=>r.status===st && r.remaining>0);
     expRemain[st] = list.reduce((s,r)=>s+r.remaining,0);
 
     const emailRows = list.filter(r=>r.hasEmail);
     const groups = buildEmailGroups(emailRows);
-    expEmailCount[st] = groups.size; // ✅ FIX: true email count
+    expEmailCount[st] = groups.size; // true email count
   });
 
   $("exp_1").textContent = fmtMoney(expRemain["1"]);
   $("exp_2").textContent = fmtMoney(expRemain["2"]);
   $("exp_3").textContent = fmtMoney(expRemain["3"]);
+
+  // ✅ better look will be via CSS class .kpi-action
+  $("exp_1_count").classList.add("kpi-action");
+  $("exp_2_count").classList.add("kpi-action");
+  $("exp_3_count").classList.add("kpi-action");
+  $("exp_all_count").classList.add("kpi-action");
 
   $("exp_1_count").textContent = `عدد الإيميلات: ${expEmailCount["1"]}`;
   $("exp_2_count").textContent = `عدد الإيميلات: ${expEmailCount["2"]}`;
@@ -500,122 +503,134 @@ function renderExposure(){
 
     const sumRemain = baseRows.reduce((s,r)=>s+r.remaining,0);
 
-    const rowsHtml = arr.map(g=>{
-      const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
-      return `
-        <tr data-ekey="${escHtml(g.ekey)}" style="cursor:pointer;">
-          <td>${escHtml(g.project)}</td>
-          <td>${g.day}</td>
-          <td>${escHtml(g.time)}</td>
-          <td>${fmtMoney(g.total)}</td>
-          <td>${fmtMoney(g.paid)}</td>
-          <td>${fmtMoney(g.remain)}</td>
-          <td>${pct}%</td>
-        </tr>
-      `;
-    });
+    const renderSummary = ()=>{
+      const rowsHtml = arr.map(g=>{
+        const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
+        return `
+          <tr data-ekey="${escHtml(g.ekey)}" style="cursor:pointer;">
+            <td>${escHtml(g.project)}</td>
+            <td>${g.day}</td>
+            <td>${escHtml(g.time)}</td>
+            <td>${fmtMoney(g.total)}</td>
+            <td>${fmtMoney(g.paid)}</td>
+            <td>${fmtMoney(g.remain)}</td>
+            <td>${pct}%</td>
+          </tr>
+        `;
+      });
 
-    // reset history at first open
+      openModal({
+        title: `إيميلات الحالة: ${statusLabel(status)}`,
+        sub: `اضغط على أي سطر لعرض تفاصيل الإيميل | عدد الإيميلات: ${arr.length} | إجمالي المتبقي: ${fmtMoney(sumRemain)}`,
+        columns: ["المشروع","اليوم","الوقت","صافي القيمة","المنصرف","المتبقي","%"],
+        rowsHtml,
+        onRowClick: (ekey)=>{
+          const g = groups.get(ekey);
+          if (!g) return;
+          const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
+          openEmailDetailsPopup({
+            title: `تفاصيل الإيميل — ${g.project}`,
+            sub: `اليوم: ${g.day} | الوقت: ${g.time} | إجمالي: ${fmtMoney(g.total)} | المنصرف: ${fmtMoney(g.paid)} | المتبقي: ${fmtMoney(g.remain)} | ${pct}%`,
+            items: g.items,
+            backRender: renderSummary
+          });
+        }
+      });
+    };
+
+    // reset history on first open
     modalHistory = [];
     setBackButton();
-
-    openModal({
-      title: `إيميلات الحالة: ${statusLabel(status)}`,
-      sub: `اضغط على أي سطر لعرض تفاصيل الإيميل | عدد الإيميلات: ${arr.length} | إجمالي المتبقي: ${fmtMoney(sumRemain)}`,
-      columns: ["المشروع","اليوم","الوقت","صافي القيمة","المنصرف","المتبقي","%"],
-      rowsHtml,
-      onRowClick: (ekey)=>{
-        const g = groups.get(ekey);
-        if (!g) return;
-        const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
-        openEmailDetailsPopup({
-          title: `تفاصيل الإيميل — ${g.project}`,
-          sub: `اليوم: ${g.day} | الوقت: ${g.time} | إجمالي: ${fmtMoney(g.total)} | المنصرف: ${fmtMoney(g.paid)} | المتبقي: ${fmtMoney(g.remain)} | ${pct}%`,
-          items: g.items
-        });
-      }
-    });
+    renderSummary();
   };
 
   $("exp_1_count").onclick = ()=> openStatusEmails("1");
   $("exp_2_count").onclick = ()=> openStatusEmails("2");
   $("exp_3_count").onclick = ()=> openStatusEmails("3");
 
-  // ✅ Card 4: total remaining + rows count of remaining (with/without email)
+  // ✅ Card 4: Remaining only + "Emails/Rows" label
   const remainingRowsAll = view.filter(r=>r.remaining > 0);
   const remainingTotalAll = remainingRowsAll.reduce((s,r)=>s+r.remaining,0);
 
+  const withEmailRows = remainingRowsAll.filter(r=>r.hasEmail);
+  const groupsAll = buildEmailGroups(withEmailRows);
+  const emailsCountAll = groupsAll.size;
+  const rowsCountAll = remainingRowsAll.length;
+
   $("exp_all").textContent = fmtMoney(remainingTotalAll);
-  $("exp_all_count").textContent = `عدد الصفوف: ${remainingRowsAll.length}`;
+  $("exp_all_count").textContent = `ميلات: ${emailsCountAll} / صفوف: ${rowsCountAll}`;
 
   $("exp_all_count").onclick = ()=>{
-    const withEmailRows = remainingRowsAll.filter(r=>r.hasEmail);
     const withoutEmailRows = remainingRowsAll.filter(r=>!r.hasEmail);
 
-    const groups = buildEmailGroups(withEmailRows);
-    const tab1Arr = Array.from(groups.entries())
+    const tab1Arr = Array.from(groupsAll.entries())
       .map(([ekey,g])=>({ ekey, ...g }))
       .sort((a,b)=> (b.day.localeCompare(a.day)) || (a.time.localeCompare(b.time)));
 
-    const tab1RowsHtml = tab1Arr.map(g=>{
-      const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
-      return `
-        <tr data-ekey="${escHtml(g.ekey)}" style="cursor:pointer;">
-          <td>${escHtml(g.project)}</td>
-          <td>${g.day}</td>
-          <td>${escHtml(g.time)}</td>
-          <td>${fmtMoney(g.total)}</td>
-          <td>${fmtMoney(g.paid)}</td>
-          <td>${fmtMoney(g.remain)}</td>
-          <td>${pct}%</td>
+    const renderCard4 = ()=>{
+      const tab1RowsHtml = tab1Arr.map(g=>{
+        const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
+        return `
+          <tr data-ekey="${escHtml(g.ekey)}" style="cursor:pointer;">
+            <td>${escHtml(g.project)}</td>
+            <td>${g.day}</td>
+            <td>${escHtml(g.time)}</td>
+            <td>${fmtMoney(g.total)}</td>
+            <td>${fmtMoney(g.paid)}</td>
+            <td>${fmtMoney(g.remain)}</td>
+            <td>${pct}%</td>
+          </tr>
+        `;
+      });
+
+      const tab2RowsHtml = withoutEmailRows.map((r,i)=>`
+        <tr>
+          <td>${i+1}</td>
+          <td>${escHtml(r.project || "—")}</td>
+          <td>${escHtml(r.sourceRequestDateTxt || "—")}</td>
+          <td>${escHtml(r.requestId || "—")}</td>
+          <td>${escHtml(r.code || "—")}</td>
+          <td>${escHtml(r.vendor || "—")}</td>
+          <td>${fmtMoney(r.effective_total)}</td>
         </tr>
-      `;
-    });
+      `);
 
-    const tab2RowsHtml = withoutEmailRows.map((r,i)=>`
-      <tr>
-        <td>${i+1}</td>
-        <td>${escHtml(r.reqNo || "—")}</td>
-        <td>${escHtml(r.code || "—")}</td>
-        <td>${escHtml(r.vendor || "—")}</td>
-        <td>${fmtMoney(r.effective_total)}</td>
-      </tr>
-    `);
+      openModal({
+        title: "المطالبات المتبقية — تفاصيل",
+        sub: `إجمالي المتبقي: ${fmtMoney(remainingTotalAll)} | ميلات: ${emailsCountAll} | صفوف: ${rowsCountAll}`,
+        tabs: [
+          {
+            label: `تم عمل إيميل (${tab1Arr.length} ميل)`,
+            columns: ["المشروع","اليوم","الوقت","صافي القيمة","المنصرف","المتبقي","%"],
+            rowsHtml: tab1RowsHtml,
+            onRowClick: (ekey)=>{
+              const g = groupsAll.get(ekey);
+              if (!g) return;
+              const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
+              openEmailDetailsPopup({
+                title: `تفاصيل الإيميل — ${g.project}`,
+                sub: `اليوم: ${g.day} | الوقت: ${g.time} | إجمالي: ${fmtMoney(g.total)} | المنصرف: ${fmtMoney(g.paid)} | المتبقي: ${fmtMoney(g.remain)} | ${pct}%`,
+                items: g.items,
+                backRender: renderCard4
+              });
+            }
+          },
+          {
+            label: `لم يتم عمل إيميل (${withoutEmailRows.length} صف)`,
+            columns: ["م","المشروع","تاريخ الطلب","رقم الطلب","الكود","اسم المورد","القيمة"],
+            rowsHtml: tab2RowsHtml
+          }
+        ]
+      });
+    };
 
-    // reset history at first open
     modalHistory = [];
     setBackButton();
-
-    openModal({
-      title: "المطالبات المتبقية — تفاصيل",
-      sub: `إجمالي المتبقي: ${fmtMoney(remainingTotalAll)} | عدد الصفوف: ${remainingRowsAll.length}`,
-      tabs: [
-        {
-          label: `تم عمل إيميل (${tab1Arr.length} ميل)`,
-          columns: ["المشروع","اليوم","الوقت","صافي القيمة","المنصرف","المتبقي","%"],
-          rowsHtml: tab1RowsHtml,
-          onRowClick: (ekey)=>{
-            const g = groups.get(ekey);
-            if (!g) return;
-            const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
-            openEmailDetailsPopup({
-              title: `تفاصيل الإيميل — ${g.project}`,
-              sub: `اليوم: ${g.day} | الوقت: ${g.time} | إجمالي: ${fmtMoney(g.total)} | المنصرف: ${fmtMoney(g.paid)} | المتبقي: ${fmtMoney(g.remain)} | ${pct}%`,
-              items: g.items
-            });
-          }
-        },
-        {
-          label: `لم يتم عمل إيميل (${withoutEmailRows.length} صف)`,
-          columns: ["م","رقم الطلب","الكود","اسم المورد","القيمة"],
-          rowsHtml: tab2RowsHtml
-        }
-      ]
-    });
+    renderCard4();
   };
 }
 
-// ===================== باقي الأقسام (كما هي)
+// ===================== Remaining sections (unchanged)
 function renderAging(){
   const asof = maxDateInView();
   const agingBase = asof || new Date();
