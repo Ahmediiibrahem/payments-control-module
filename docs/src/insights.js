@@ -173,7 +173,6 @@ function normalizeRow(raw){
   const vendor = normText(row.vendor);
   const exactTime = normText(row.exact_time) || normText(row.Exacttime) || "";
 
-  // تعريف "تم عمل إيميل"
   const hasEmail = !!vendor && !!exactTime && hasValidDate(payDate);
 
   return {
@@ -223,7 +222,6 @@ function applyFilters(){
     if (projectKey && r.projectKey !== projectKey) return false;
     if (status && r.status !== status) return false;
 
-    // فلترة بالتاريخ على أساس تاريخ طلب الصرف
     if ((fromUTC || toUTC) && !inRangeUTC(r.payDate, fromUTC, toUTC)) return false;
     return true;
   });
@@ -242,7 +240,6 @@ function maxDateInView(){
 }
 
 function dayKey(d){
-  // YYYY-MM-DD
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth()+1).padStart(2,"0");
   const dd = String(d.getUTCDate()).padStart(2,"0");
@@ -259,7 +256,6 @@ function openModal({ title, sub, tabs = null, columns = [], rows = [] }){
   $("insModalTitle").textContent = title || "—";
   $("insModalSub").textContent = sub || "";
 
-  // tabs
   if (tabs && tabs.length){
     tabsEl.style.display = "flex";
     tabsEl.innerHTML = tabs.map((t,i)=>`<button class="nav-btn" data-idx="${i}" style="opacity:.9;">${t.label}</button>`).join("");
@@ -275,7 +271,6 @@ function openModal({ title, sub, tabs = null, columns = [], rows = [] }){
 
   if (tabs && tabs.length){
     renderTable(tabs[0].columns, tabs[0].rows);
-
     tabsEl.querySelectorAll("button").forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const idx = +btn.getAttribute("data-idx");
@@ -318,11 +313,11 @@ function renderExecutive(){
   const asof = maxDateInView();
   $("asof").textContent = asof ? `As of: ${dayKey(asof)}` : "As of: —";
 
-  // ✅ SLA بالقيم: amount_paid خلال ≤ 5 أيام / إجمالي amount_paid للمدفوعات المكتملة
+  // ✅ SLA بالقيم لكن يظهر 3 سطور: إجمالي / المنصرف / النسبة
   const completed = view.filter(r=>hasValidDate(r.payDate) && hasValidDate(r.paidDate) && r.amount_paid > 0);
 
-  let sumAll = 0;
-  let sumOk = 0;
+  let sumAll = 0; // إجمالي المصروف للطلبات المكتملة (Base)
+  let sumOk = 0;  // المصروف اللي اتدفع خلال <= 5 أيام
 
   completed.forEach(r=>{
     const d = daysBetween(r.payDate, r.paidDate);
@@ -332,15 +327,18 @@ function renderExecutive(){
 
   if (sumAll > 0){
     const pct = Math.round((sumOk / sumAll) * 100);
-    $("k_sla").textContent = `${pct}% (${fmtMoney(sumOk)} / ${fmtMoney(sumAll)})`;
+    $("sla_total").textContent = fmtMoney(sumAll);
+    $("sla_paid").textContent = fmtMoney(sumOk);
+    $("sla_pct").textContent = `${pct}%`;
   }else{
-    $("k_sla").textContent = "—";
+    $("sla_total").textContent = "—";
+    $("sla_paid").textContent = "—";
+    $("sla_pct").textContent = "—";
   }
 }
 
-// ===================== Cash Exposure
+// ===================== Cash Exposure (كما هو في نسختك الحالية)
 function renderExposure(){
-  // أول 3: متبقي حسب الحالة + عدد الإيميلات (hasEmail)
   const expRemain = { "1":0, "2":0, "3":0 };
   const expEmailCount = { "1":0, "2":0, "3":0 };
 
@@ -359,16 +357,13 @@ function renderExposure(){
   $("exp_2_count").textContent = `عدد الإيميلات: ${expEmailCount["2"]}`;
   $("exp_3_count").textContent = `عدد الإيميلات: ${expEmailCount["3"]}`;
 
-  // الكارت الأخير: إجمالي المطالبات (بعد الملغي) بغض النظر عن الدفع/الإيميل
   const claimsTotal = view.reduce((s,r)=>s+r.effective_total,0);
   $("exp_all").textContent = fmtMoney(claimsTotal);
   $("exp_all_count").textContent = `عدد الصفوف: ${view.length}`;
 
-  // أحداث الضغط على العداد (أول 3): Popup للإيميلات غير المحولة/حسب الحالة
   const openStatusEmails = (status)=>{
     const list = view.filter(r=>r.status===status && r.remaining>0 && r.hasEmail);
 
-    // ملخص لكل "إيميل": project + day + time
     const m = new Map();
     list.forEach(r=>{
       const dk = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
@@ -421,12 +416,10 @@ function renderExposure(){
   $("exp_2_count").onclick = ()=> openStatusEmails("2");
   $("exp_3_count").onclick = ()=> openStatusEmails("3");
 
-  // الكارت الأخير: Popup بتابين (تم عمل إيميل / لم يتم عمل إيميل)
   $("exp_all_count").onclick = ()=>{
     const withEmail = view.filter(r=>r.hasEmail);
     const withoutEmail = view.filter(r=>!r.hasEmail);
 
-    // Tab 1: تجميع حسب كل إيميل
     const m1 = new Map();
     withEmail.forEach(r=>{
       const dk = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
@@ -460,7 +453,6 @@ function renderExposure(){
       `;
     });
 
-    // Tab 2: تجميع حسب المشروع (بدون إيميل)
     const m2 = new Map();
     withoutEmail.forEach(r=>{
       const p = r.project || "(بدون مشروع)";
@@ -500,7 +492,7 @@ function renderExposure(){
   };
 }
 
-// ===================== باقي الأقسام (كما هي)
+// ===================== باقي الأقسام
 function renderAging(){
   const asof = maxDateInView();
   const agingBase = asof || new Date();
