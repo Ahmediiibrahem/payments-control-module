@@ -13,7 +13,7 @@ let projectsBySector = new Map();
 
 const WEEK_AR = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 
-// ===== Helpers
+// ===================== Helpers
 function normText(x) {
   return String(x ?? "")
     .replace(/[\u200E\u200F\u202A-\u202E]/g, "")
@@ -120,7 +120,17 @@ function inRangeUTC(d, from, to){
   return true;
 }
 
-// ===== Status
+function dayKey(d){
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth()+1).padStart(2,"0");
+  const dd = String(d.getUTCDate()).padStart(2,"0");
+  return `${y}-${m}-${dd}`;
+}
+function emailKey(project, day, time){
+  return `${project}|||${day}|||${time}`;
+}
+
+// ===================== Status
 function statusFromRow({pay, appr, paid}){
   const hasPay = !!pay;
   const hasAppr = !!appr;
@@ -131,7 +141,7 @@ function statusFromRow({pay, appr, paid}){
   return "";
 }
 
-// ===== CSV
+// ===================== CSV
 function parseCSV(text){
   const res = Papa.parse(text, {
     header:true,
@@ -142,7 +152,7 @@ function parseCSV(text){
   return res.data || [];
 }
 
-// ===== Normalize
+// ===================== Normalize
 function normalizeRow(raw){
   const row = {};
   Object.entries(raw).forEach(([k,v])=>{
@@ -176,11 +186,17 @@ function normalizeRow(raw){
   // "تم عمل إيميل" = vendor + exactTime + payment_request_date
   const hasEmail = !!vendor && !!exactTime && hasValidDate(payDate);
 
+  // OPTIONAL FIELDS (حسب الشيت لو موجودة)
+  const reqNo = normText(row.request_no || row.request_number || row.req_no || row["requestno"] || row["RequestNo"] || "");
+  const code = normText(row.code || row.vendor_code || row.supplier_code || row["VendorCode"] || row["الكود"] || "");
+
   return {
     sectorKey, projectKey,
     sector, project,
 
     vendor,
+    code,
+    reqNo,
     exactTime,
 
     payDate, apprDate, paidDate,
@@ -207,7 +223,7 @@ function rebuildProjectDropdownForSector(){
   setSelectOptions("project", projects, true);
 }
 
-// ===== Filters
+// ===================== Filters
 function applyFilters(){
   const sectorKey = $("sector").value;
   const projectKey = normText($("project").value);
@@ -238,22 +254,61 @@ function maxDateInView(){
   });
   return ms ? new Date(ms) : null;
 }
-function dayKey(d){
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth()+1).padStart(2,"0");
-  const dd = String(d.getUTCDate()).padStart(2,"0");
-  return `${y}-${m}-${dd}`;
+
+// ===================== Modal history (Back)
+let modalHistory = [];
+let modalIsOpen = false;
+
+function captureModalState(){
+  return {
+    title: $("insModalTitle").textContent,
+    sub: $("insModalSub").textContent,
+    tabsHtml: $("insTabs").innerHTML,
+    tabsVisible: $("insTabs").style.display,
+    theadHtml: $("insThead").innerHTML,
+    tbodyHtml: $("insTbody").innerHTML,
+    // we rebind click handlers per render (so we store a renderer function below instead for complex cases)
+    // In this project, we will store a reRender callback when opening modal.
+    reRender: null
+  };
 }
-function emailKey(project, day, time){
-  return `${project}|||${day}|||${time}`;
+function setBackButton(){
+  const backBtn = $("insModalBack");
+  backBtn.style.display = modalHistory.length ? "inline-flex" : "none";
+}
+function bindModalBack(){
+  const backBtn = $("insModalBack");
+  backBtn.onclick = ()=>{
+    if (!modalHistory.length) return;
+    const prev = modalHistory.pop();
+    if (prev.reRender){
+      prev.reRender();
+    }else{
+      $("insModalTitle").textContent = prev.title;
+      $("insModalSub").textContent = prev.sub;
+      $("insTabs").innerHTML = prev.tabsHtml;
+      $("insTabs").style.display = prev.tabsVisible;
+      $("insThead").innerHTML = prev.theadHtml;
+      $("insTbody").innerHTML = prev.tbodyHtml;
+      $("insTbody").onclick = null;
+    }
+    setBackButton();
+  };
 }
 
-// ===== Modal (with optional row click)
-function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRowClick = null }){
+// ===================== Modal (open + optional row click)
+function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRowClick = null, pushHistory = false, reRender = null }){
   const modal = $("insModal");
   const tabsEl = $("insTabs");
   const thead = $("insThead");
   const tbody = $("insTbody");
+
+  if (pushHistory && modalIsOpen){
+    const snap = captureModalState();
+    snap.reRender = reRender; // optional
+    modalHistory.push(snap);
+  }
+  setBackButton();
 
   $("insModalTitle").textContent = title || "—";
   $("insModalSub").textContent = sub || "";
@@ -261,39 +316,43 @@ function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRow
   // cleanup old handler
   tbody.onclick = null;
 
-  const renderTable = (cols, rws)=>{
+  const renderTable = (cols, rws, clickHandler)=>{
     thead.innerHTML = `<tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr>`;
     tbody.innerHTML = rws.length ? rws.join("") : `<tr><td colspan="${cols.length}">لا توجد بيانات</td></tr>`;
-    if (onRowClick){
+    if (clickHandler){
       tbody.onclick = (e)=>{
         const tr = e.target.closest("tr[data-ekey]");
         if (!tr) return;
-        onRowClick(tr.getAttribute("data-ekey"));
+        clickHandler(tr.getAttribute("data-ekey"));
       };
+    }else{
+      tbody.onclick = null;
     }
   };
 
   if (tabs && tabs.length){
     tabsEl.style.display = "flex";
     tabsEl.innerHTML = tabs.map((t,i)=>`<button class="nav-btn" data-idx="${i}" style="opacity:.9;">${t.label}</button>`).join("");
-    renderTable(tabs[0].columns, tabs[0].rowsHtml);
+
+    // default tab 0
+    renderTable(tabs[0].columns, tabs[0].rowsHtml, tabs[0].onRowClick || null);
 
     tabsEl.querySelectorAll("button").forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const idx = +btn.getAttribute("data-idx");
         const t = tabs[idx];
-        onRowClick = t.onRowClick || null;
-        renderTable(t.columns, t.rowsHtml);
+        renderTable(t.columns, t.rowsHtml, t.onRowClick || null);
       });
     });
   }else{
     tabsEl.style.display = "none";
     tabsEl.innerHTML = "";
-    renderTable(columns, rowsHtml);
+    renderTable(columns, rowsHtml, onRowClick || null);
   }
 
   modal.classList.add("show");
   modal.setAttribute("aria-hidden","false");
+  modalIsOpen = true;
 
   const close = ()=>{
     modal.classList.remove("show");
@@ -302,6 +361,10 @@ function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRow
     modal.removeEventListener("click", onBackdrop);
     document.removeEventListener("keydown", onEsc);
     tbody.onclick = null;
+
+    modalHistory = [];
+    setBackButton();
+    modalIsOpen = false;
   };
   const onBackdrop = (e)=>{ if(e.target===modal) close(); };
   const onEsc = (e)=>{ if(e.key==="Escape") close(); };
@@ -311,7 +374,40 @@ function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRow
   document.addEventListener("keydown", onEsc);
 }
 
-// ===== Executive Summary + SLA (value-based + explanation)
+// ===================== Drill-down popup for ONE email group
+function openEmailDetailsPopup({ title, sub, items }){
+  const sorted = items.slice().sort((a,b)=>{
+    const va = (a.vendor||"").localeCompare(b.vendor||"");
+    if (va !== 0) return va;
+    return (a.exactTime || "").localeCompare(b.exactTime || "");
+  });
+
+  const rowsHtml = sorted.map((r,i)=>{
+    const pct = r.effective_total > 0 ? clamp(Math.round((r.amount_paid/r.effective_total)*100),0,100) : 0;
+    return `
+      <tr>
+        <td>${i+1}</td>
+        <td>${escHtml(r.reqNo || "—")}</td>
+        <td>${escHtml(r.code || "—")}</td>
+        <td>${escHtml(r.vendor || "—")}</td>
+        <td>${fmtMoney(r.effective_total)}</td>
+        <td>${fmtMoney(r.amount_paid)}</td>
+        <td>${fmtMoney(r.remaining)}</td>
+        <td>${pct}%</td>
+      </tr>
+    `;
+  });
+
+  openModal({
+    title,
+    sub,
+    columns: ["م","رقم الطلب","الكود","اسم المورد","القيمة","المنصرف","المتبقي","%"],
+    rowsHtml,
+    pushHistory: true
+  });
+}
+
+// ===================== Executive Summary + SLA
 function renderExecutive(){
   const total = view.reduce((s,r)=>s+r.effective_total,0);
   const paidAll = view.reduce((s,r)=>s+r.amount_paid,0);
@@ -341,69 +437,44 @@ function renderExecutive(){
     $("sla_total").textContent = fmtMoney(basePaid);
     $("sla_paid").textContent = fmtMoney(okPaid);
     $("sla_pct").textContent = `${pct}%`;
-
-    const missing = Math.max(0, paidAll - basePaid);
-    if (missing > 0){
-      $("sla_note").textContent =
-        `ملاحظة: إجمالي المصروف = ${fmtMoney(paidAll)} لكن SLA محسوب على ${fmtMoney(basePaid)} (فرق ${fmtMoney(missing)} بسبب صفوف مدفوعة بدون تواريخ مكتملة).`;
-    }else{
-      $("sla_note").textContent = `ملاحظة: SLA محسوب على المصروف للطلبات المكتملة فقط (Payment Request + Payment Date).`;
-    }
   }else{
     $("sla_total").textContent = "—";
     $("sla_paid").textContent = "—";
     $("sla_pct").textContent = "—";
-    $("sla_note").textContent = "ملاحظة: لا توجد مدفوعات مكتملة (Payment Request + Payment Date) داخل الفلاتر الحالية.";
   }
 }
 
-// ===== Drill-down helpers
-function openEmailDetailsPopup({ title, sub, items }){
-  // items = array of raw rows belonging to ONE email group
-  const sorted = items.slice().sort((a,b)=>{
-    const va = a.vendor.localeCompare(b.vendor);
-    if (va !== 0) return va;
-    return (a.exactTime || "").localeCompare(b.exactTime || "");
+// ===================== Cash Exposure
+function buildEmailGroups(list){
+  // returns Map(ekey -> group)
+  const groups = new Map();
+  list.forEach(r=>{
+    const day = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
+    const key = emailKey(r.project, day, r.exactTime);
+    if (!groups.has(key)){
+      groups.set(key, { project:r.project, day, time:r.exactTime, total:0, paid:0, remain:0, items:[] });
+    }
+    const g = groups.get(key);
+    g.total += r.effective_total;
+    g.paid += r.amount_paid;
+    g.remain += r.remaining;
+    g.items.push(r);
   });
-
-  const rowsHtml = sorted.map((r,i)=>{
-    const pay = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
-    const appr = hasValidDate(r.apprDate) ? dayKey(r.apprDate) : "—";
-    const paid = hasValidDate(r.paidDate) ? dayKey(r.paidDate) : "—";
-    const pct = r.effective_total > 0 ? clamp(Math.round((r.amount_paid/r.effective_total)*100),0,100) : 0;
-    return `
-      <tr>
-        <td>${i+1}</td>
-        <td>${escHtml(r.vendor || "—")}</td>
-        <td>${fmtMoney(r.effective_total)}</td>
-        <td>${fmtMoney(r.amount_paid)}</td>
-        <td>${fmtMoney(r.remaining)}</td>
-        <td>${pct}%</td>
-        <td>${pay}</td>
-        <td>${appr}</td>
-        <td>${paid}</td>
-      </tr>
-    `;
-  });
-
-  openModal({
-    title,
-    sub,
-    columns: ["م","المورد","صافي القيمة","المنصرف","المتبقي","%","طلب الصرف","الاعتماد","الدفع"],
-    rowsHtml
-  });
+  return groups;
 }
 
-// ===== Cash Exposure (counts + popup summary + drilldown)
 function renderExposure(){
   const expRemain = { "1":0, "2":0, "3":0 };
   const expEmailCount = { "1":0, "2":0, "3":0 };
 
-  view.forEach(r=>{
-    if (r.remaining > 0 && (r.status==="1"||r.status==="2"||r.status==="3")){
-      expRemain[r.status] += r.remaining;
-      if (r.hasEmail) expEmailCount[r.status] += 1;
-    }
+  // First 3 cards: remaining + UNIQUE email count
+  ["1","2","3"].forEach(st=>{
+    const list = view.filter(r=>r.status===st && r.remaining>0);
+    expRemain[st] = list.reduce((s,r)=>s+r.remaining,0);
+
+    const emailRows = list.filter(r=>r.hasEmail);
+    const groups = buildEmailGroups(emailRows);
+    expEmailCount[st] = groups.size; // ✅ FIX: true email count
   });
 
   $("exp_1").textContent = fmtMoney(expRemain["1"]);
@@ -414,38 +485,20 @@ function renderExposure(){
   $("exp_2_count").textContent = `عدد الإيميلات: ${expEmailCount["2"]}`;
   $("exp_3_count").textContent = `عدد الإيميلات: ${expEmailCount["3"]}`;
 
-  const claimsTotal = view.reduce((s,r)=>s+r.effective_total,0);
-  $("exp_all").textContent = fmtMoney(claimsTotal);
-  $("exp_all_count").textContent = `عدد الصفوف: ${view.length}`;
-
   const statusLabel =
     (s)=> s==="1" ? "بدون اعتماد ولم يحول" :
           s==="2" ? "معتمد ولم يحول" :
           "معتمد وتم تحويله (متبقي جزئي)";
 
   const openStatusEmails = (status)=>{
-    const list = view.filter(r=>r.status===status && r.remaining>0 && r.hasEmail);
-
-    // Group by (project + day + time)
-    const groups = new Map(); // ekey -> {project,day,time,total,paid,remain,items[]}
-    list.forEach(r=>{
-      const day = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
-      const key = emailKey(r.project, day, r.exactTime);
-      if (!groups.has(key)){
-        groups.set(key, { project:r.project, day, time:r.exactTime, total:0, paid:0, remain:0, items:[] });
-      }
-      const g = groups.get(key);
-      g.total += r.effective_total;
-      g.paid += r.amount_paid;
-      g.remain += r.remaining;
-      g.items.push(r);
-    });
+    const baseRows = view.filter(r=>r.status===status && r.remaining>0 && r.hasEmail);
+    const groups = buildEmailGroups(baseRows);
 
     const arr = Array.from(groups.entries())
       .map(([ekey,g])=>({ ekey, ...g }))
       .sort((a,b)=> (b.day.localeCompare(a.day)) || (a.time.localeCompare(b.time)));
 
-    const sumRemain = list.reduce((s,r)=>s+r.remaining,0);
+    const sumRemain = baseRows.reduce((s,r)=>s+r.remaining,0);
 
     const rowsHtml = arr.map(g=>{
       const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
@@ -461,6 +514,10 @@ function renderExposure(){
         </tr>
       `;
     });
+
+    // reset history at first open
+    modalHistory = [];
+    setBackButton();
 
     openModal({
       title: `إيميلات الحالة: ${statusLabel(status)}`,
@@ -484,25 +541,18 @@ function renderExposure(){
   $("exp_2_count").onclick = ()=> openStatusEmails("2");
   $("exp_3_count").onclick = ()=> openStatusEmails("3");
 
-  // Last card: Tabs (with email drilldown on Tab 1)
+  // ✅ Card 4: total remaining + rows count of remaining (with/without email)
+  const remainingRowsAll = view.filter(r=>r.remaining > 0);
+  const remainingTotalAll = remainingRowsAll.reduce((s,r)=>s+r.remaining,0);
+
+  $("exp_all").textContent = fmtMoney(remainingTotalAll);
+  $("exp_all_count").textContent = `عدد الصفوف: ${remainingRowsAll.length}`;
+
   $("exp_all_count").onclick = ()=>{
-    const withEmail = view.filter(r=>r.hasEmail);
-    const withoutEmail = view.filter(r=>!r.hasEmail);
+    const withEmailRows = remainingRowsAll.filter(r=>r.hasEmail);
+    const withoutEmailRows = remainingRowsAll.filter(r=>!r.hasEmail);
 
-    const groups = new Map();
-    withEmail.forEach(r=>{
-      const day = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
-      const key = emailKey(r.project, day, r.exactTime);
-      if (!groups.has(key)){
-        groups.set(key, { project:r.project, day, time:r.exactTime, total:0, paid:0, remain:0, items:[] });
-      }
-      const g = groups.get(key);
-      g.total += r.effective_total;
-      g.paid += r.amount_paid;
-      g.remain += r.remaining;
-      g.items.push(r);
-    });
-
+    const groups = buildEmailGroups(withEmailRows);
     const tab1Arr = Array.from(groups.entries())
       .map(([ekey,g])=>({ ekey, ...g }))
       .sort((a,b)=> (b.day.localeCompare(a.day)) || (a.time.localeCompare(b.time)));
@@ -522,32 +572,26 @@ function renderExposure(){
       `;
     });
 
-    const m2 = new Map();
-    withoutEmail.forEach(r=>{
-      const p = r.project || "(بدون مشروع)";
-      if (!m2.has(p)) m2.set(p, { project:p, rows:0, total:0 });
-      const a = m2.get(p);
-      a.rows += 1;
-      a.total += r.effective_total;
-    });
-
-    const tab2Arr = Array.from(m2.values()).sort((a,b)=> b.total - a.total);
-    const tab2RowsHtml = tab2Arr.map(x=>`
+    const tab2RowsHtml = withoutEmailRows.map((r,i)=>`
       <tr>
-        <td>${escHtml(x.project)}</td>
-        <td>${x.rows}</td>
-        <td>${fmtMoney(x.total)}</td>
+        <td>${i+1}</td>
+        <td>${escHtml(r.reqNo || "—")}</td>
+        <td>${escHtml(r.code || "—")}</td>
+        <td>${escHtml(r.vendor || "—")}</td>
+        <td>${fmtMoney(r.effective_total)}</td>
       </tr>
     `);
 
-    const claimsTotal2 = view.reduce((s,r)=>s+r.effective_total,0);
+    // reset history at first open
+    modalHistory = [];
+    setBackButton();
 
     openModal({
-      title: "إجمالي المطالبات — تفاصيل",
-      sub: `اضغط على أي سطر في تبويب (تم عمل إيميل) لعرض تفاصيل الإيميل | إجمالي (بعد الملغي): ${fmtMoney(claimsTotal2)} | عدد الصفوف: ${view.length}`,
+      title: "المطالبات المتبقية — تفاصيل",
+      sub: `إجمالي المتبقي: ${fmtMoney(remainingTotalAll)} | عدد الصفوف: ${remainingRowsAll.length}`,
       tabs: [
         {
-          label: `تم عمل إيميل (${tab1Arr.length})`,
+          label: `تم عمل إيميل (${tab1Arr.length} ميل)`,
           columns: ["المشروع","اليوم","الوقت","صافي القيمة","المنصرف","المتبقي","%"],
           rowsHtml: tab1RowsHtml,
           onRowClick: (ekey)=>{
@@ -562,8 +606,8 @@ function renderExposure(){
           }
         },
         {
-          label: `لم يتم عمل إيميل (${withoutEmail.length})`,
-          columns: ["المشروع","عدد الصفوف","إجمالي المطالبات"],
+          label: `لم يتم عمل إيميل (${withoutEmailRows.length} صف)`,
+          columns: ["م","رقم الطلب","الكود","اسم المورد","القيمة"],
           rowsHtml: tab2RowsHtml
         }
       ]
@@ -571,7 +615,7 @@ function renderExposure(){
   };
 }
 
-// ===== Remaining sections unchanged
+// ===================== باقي الأقسام (كما هي)
 function renderAging(){
   const asof = maxDateInView();
   const agingBase = asof || new Date();
@@ -713,7 +757,7 @@ function renderDataQuality(){
   `).join("");
 }
 
-// ===== Render
+// ===================== Render
 function renderAll(){
   applyFilters();
   renderExecutive();
@@ -724,8 +768,10 @@ function renderAll(){
   renderDataQuality();
 }
 
-// ===== Init
+// ===================== Init
 async function init(){
+  bindModalBack();
+
   if (typeof Papa === "undefined"){
     $("meta").textContent = "⚠️ Papaparse غير محمّل. تأكد من ./assets/vendor/papaparse.min.js";
     return;
