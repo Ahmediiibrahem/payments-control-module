@@ -2,6 +2,8 @@ import { HEADER_MAP } from "./schema.js";
 import { DATA_SOURCE } from "./config.js";
 
 let data = [];
+let groupsAll = []; // grouped emails (after cleaning)
+let groupsView = []; // after filters
 
 let projectsBySector = new Map();
 let sectorLabelByKey = new Map();
@@ -48,14 +50,14 @@ function normalizeHeaderKey(h) {
     .trim();
 }
 
-function clamp(n, min, max){
-  return Math.max(min, Math.min(max, n));
-}
-
 function escHtml(s){
   return String(s ?? "").replace(/[&<>"']/g, ch => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[ch]));
+}
+
+function clamp(n, min, max){
+  return Math.max(min, Math.min(max, n));
 }
 
 // ============================
@@ -98,16 +100,6 @@ function parseDateSmart(s) {
     return d;
   }
 
-  // fallback smart M/D/YYYY
-  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
-  if (m) {
-    const a = +m[1], b = +m[2], y = +m[3];
-    let mm = a, dd = b;
-    if (a > 12) { dd = a; mm = b; }
-    const d = new Date(Date.UTC(y, mm - 1, dd));
-    return isNaN(d.getTime()) ? null : d;
-  }
-
   return null;
 }
 
@@ -133,66 +125,6 @@ function timeToMinutes(t){
   if (ap === "PM") hh += 12;
 
   return hh * 60 + mm;
-}
-
-// ddmmyyyy OR dd/mm/yyyy -> Date UTC
-function parseUserDateInput(txt){
-  const t = normText(txt);
-  if (!t) return null;
-
-  const m1 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
-  if (m1){
-    const dd = +m1[1], mm = +m1[2], yy = +m1[3];
-    const d = new Date(Date.UTC(yy, mm-1, dd));
-    if (isNaN(d.getTime())) return null;
-    if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm-1 || d.getUTCDate() !== dd) return null;
-    return d;
-  }
-
-  const digits = t.replace(/\D/g, "");
-  if (digits.length === 8){
-    const dd = +digits.slice(0,2);
-    const mm = +digits.slice(2,4);
-    const yy = +digits.slice(4,8);
-    const d = new Date(Date.UTC(yy, mm-1, dd));
-    if (isNaN(d.getTime())) return null;
-    if (d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm-1 || d.getUTCDate() !== dd) return null;
-    return d;
-  }
-
-  return null;
-}
-
-function formatIsoDate(d){
-  const dd = String(d.getUTCDate()).padStart(2,"0");
-  const mm = String(d.getUTCMonth()+1).padStart(2,"0");
-  const yy = String(d.getUTCFullYear());
-  return `${dd}/${mm}/${yy}`;
-}
-
-function inRangeUTC(d, from, to){
-  if (!(d instanceof Date) || isNaN(d.getTime())) return false;
-  const x = d.getTime();
-  if (from && x < from.getTime()) return false;
-  if (to && x > to.getTime()) return false;
-  return true;
-}
-
-// Auto format: 12012026 -> 12/01/2026 أثناء الكتابة
-function autoSlashDateInput(el){
-  if (!el) return;
-  const raw = el.value;
-  const digits = raw.replace(/\D/g, "").slice(0, 8);
-
-  let out = "";
-  if (digits.length <= 2){
-    out = digits;
-  } else if (digits.length <= 4){
-    out = digits.slice(0,2) + "/" + digits.slice(2);
-  } else {
-    out = digits.slice(0,2) + "/" + digits.slice(2,4) + "/" + digits.slice(4);
-  }
-  el.value = out;
 }
 
 // ============================
@@ -241,24 +173,6 @@ function pickTimeFromRaw(raw){
 }
 
 // ============================
-// Status logic (1/2/3)
-// ============================
-function hasValidDateStr(s){
-  return !!parseDateSmart(s);
-}
-
-function statusFromRow(r){
-  const hasPay = hasValidDateStr(r.payment_request_date);
-  const hasAppr = hasValidDateStr(r.approval_date);
-  const hasPaid = hasValidDateStr(r.payment_date);
-
-  if (hasPay && !hasAppr && !hasPaid) return "1";
-  if (hasPay && hasAppr && !hasPaid) return "2";
-  if (hasPay && hasAppr && hasPaid) return "3";
-  return "";
-}
-
-// ============================
 // Normalize Row
 // ============================
 function normalizeRow(raw) {
@@ -279,14 +193,13 @@ function normalizeRow(raw) {
 
   const vendor = normalizeVendor(row.vendor);
 
+  // Exacttime preferred, fallback to old Time
   const exactTimeVal = pickExactTimeFromRaw(raw) || normText(row.exact_time);
   const oldTimeVal = pickTimeFromRaw(raw);
   const timeVal = exactTimeVal || oldTimeVal || "";
 
   const payStr = normText(row.payment_request_date);
   const srcStr = normText(row.source_request_date);
-  const apprStr = normText(row.approval_date);
-  const paidStr = normText(row.payment_date);
 
   const dPay = parseDateSmart(payStr);
   const dSrc = parseDateSmart(srcStr);
@@ -296,51 +209,73 @@ function normalizeRow(raw) {
   const amount_paid = toNumber(row.amount_paid);
   const amount_canceled = toNumber(row.amount_canceled);
 
+  // ✅ effective totals
   const effective_total = Math.max(0, amount_total - amount_canceled);
   const effective_remaining = Math.max(0, effective_total - amount_paid);
-
-  // ✅ Region from sheet
-  const region_code = normText(row.region_code).toUpperCase(); // SA01..SA14
-  const region_name = normText(row.region_name);               // display name from sheet
 
   return {
     sectorKey, projectKey,
     sector: sectorLabel,
     project: projectLabel,
-
-    region_code,
-    region_name,
-
     vendor,
     code: normText(row.code),
-    request_id: normText(row.request_id),
 
     amount_total,
     amount_paid,
     amount_canceled,
-
     effective_total,
     effective_remaining,
 
     payment_request_date: payStr,
     source_request_date: srcStr,
-    approval_date: apprStr,
-    payment_date: paidStr,
 
     _emailDate: emailDate,
+    day: emailDate ? dayLabel(emailDate) : "",
     time: timeVal,
     _timeMin: timeToMinutes(timeVal),
-
-    _status: statusFromRow({
-      payment_request_date: payStr,
-      approval_date: apprStr,
-      payment_date: paidStr
-    }),
   };
 }
 
 // ============================
-// Dropdown Helpers
+// Grouping (Email groups)
+// ============================
+// group key: sector+project+time+day
+function groupEmails(rows){
+  const map = new Map();
+
+  rows.forEach(r => {
+    if (!r.vendor || !r.time || !r._emailDate) return; // only valid emails
+
+    const key = `${r.sectorKey}|||${r.projectKey}|||${r.time}|||${r.day}`;
+
+    if (!map.has(key)){
+      map.set(key, {
+        key,
+        sectorKey:r.sectorKey,
+        projectKey:r.projectKey,
+        sector:r.sector,
+        project:r.project,
+        day:r.day,
+        date:r._emailDate,
+        time:r.time,
+        timeMin:r._timeMin,
+        total:0,
+        paid:0,
+        rows:[]
+      });
+    }
+
+    const g = map.get(key);
+    g.total += r.effective_total;
+    g.paid  += r.amount_paid;
+    g.rows.push(r);
+  });
+
+  return Array.from(map.values());
+}
+
+// ============================
+// Dropdown helpers
 // ============================
 function uniqSorted(arr) {
   return Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -370,231 +305,104 @@ function rebuildProjectDropdownForSector() {
   setSelectOptions("project", projects, true);
 }
 
-function buildRegionDropdown(){
-  const sel = $("region");
-  if (!sel) return;
+function buildDayDatalist(groups){
+  const list = $("day_list");
+  if (!list) return;
 
-  const codes = uniqSorted(data.map(r => r.region_code).filter(Boolean));
-
-  // name preference: RegionName from sheet; fallback: show code
-  const nameMap = new Map();
-  data.forEach(r=>{
-    if (r.region_code && r.region_name) nameMap.set(r.region_code, r.region_name);
-  });
-
-  sel.innerHTML =
-    `<option value="">الكل</option>` +
-    codes.map(code=>{
-      const nm = nameMap.get(code) || code;
-      return `<option value="${code}">${nm}</option>`;
-    }).join("");
+  const days = uniqSorted(groups.map(g => g.day));
+  list.innerHTML = days.map(d => `<option value="${d}"></option>`).join("");
 }
 
 // ============================
-// Filtering + Grouping
+// Filters (HTML القديم: sector / project / day_key)
 // ============================
-function rowsEmailsOnly(rows){
-  return rows.filter(r => r.vendor && r.time && r._emailDate);
-}
-
-function getFilterRange(){
-  const from = parseUserDateInput($("date_from_txt")?.value);
-  const to = parseUserDateInput($("date_to_txt")?.value);
-
-  const fromUTC = from ? new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate())) : null;
-  const toUTC = to ? new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate(), 23, 59, 59)) : null;
-
-  return { fromUTC, toUTC };
-}
-
-function filterRowByControls(r){
+function filterGroups(){
   const sectorKey = $("sector").value;
   const projectLabel = $("project").value;
   const projectKey = normText(projectLabel);
+  const dayKey = normText($("day_key").value);
 
-  const regionCode = normText($("region")?.value).toUpperCase();
-  const status = $("status")?.value || "";
-  const { fromUTC, toUTC } = getFilterRange();
-
-  if (sectorKey && r.sectorKey !== sectorKey) return false;
-  if (projectKey && r.projectKey !== projectKey) return false;
-  if (regionCode && r.region_code !== regionCode) return false;
-  if (status && r._status !== status) return false;
-  if ((fromUTC || toUTC) && !inRangeUTC(r._emailDate, fromUTC, toUTC)) return false;
-
-  return true;
-}
-
-function groupEmails(rows){
-  const map = new Map();
-
-  rows.forEach(r => {
-    const dlab = dayLabel(r._emailDate);
-    const key = `${r.sectorKey}|||${r.projectKey}|||${r.time}|||${dlab}`;
-
-    if (!map.has(key)){
-      map.set(key, {
-        key,
-        sectorKey:r.sectorKey,
-        projectKey:r.projectKey,
-        sector:r.sector,
-        project:r.project,
-
-        region_code:r.region_code,
-        region_name:r.region_name,
-
-        time:r.time,
-        timeMin:r._timeMin,
-        day:dlab,
-        date:r._emailDate,
-        total:0,
-        paid:0,
-        status:r._status,
-        rows:[]
-      });
-    }
-
-    const g = map.get(key);
-    g.total += r.effective_total;
-    g.paid  += r.amount_paid;
-    g.rows.push(r);
-  });
-
-  return Array.from(map.values());
-}
-
-function filterGroups(groups){
-  const sectorKey = $("sector").value;
-  const projectLabel = $("project").value;
-  const projectKey = normText(projectLabel);
-
-  const regionCode = normText($("region")?.value).toUpperCase();
-  const status = $("status")?.value || "";
-  const { fromUTC, toUTC } = getFilterRange();
-
-  return groups.filter(g=>{
+  return groupsAll.filter(g=>{
     if (sectorKey && g.sectorKey !== sectorKey) return false;
     if (projectKey && g.projectKey !== projectKey) return false;
-    if (regionCode && g.region_code !== regionCode) return false;
-    if (status && g.status !== status) return false;
-    if ((fromUTC || toUTC) && !inRangeUTC(g.date, fromUTC, toUTC)) return false;
+    if (dayKey && g.day !== dayKey) return false;
     return true;
   });
 }
 
 // ============================
-// Day Modal (Click on chart bar)
+// Chart (last 15 days from last date)
 // ============================
-function ensureDayModal(){
-  let modal = document.getElementById("dayModal");
-  if (modal) return modal;
+function renderChart(groups){
+  const chart = $("chart");
+  chart.innerHTML = "";
 
-  modal = document.createElement("div");
-  modal.id = "dayModal";
-  modal.className = "modal-backdrop";
-  modal.setAttribute("aria-hidden","true");
+  const valid = (groups || []).filter(g => g?.date instanceof Date && !isNaN(g.date.getTime()));
+  if (!valid.length) return;
 
-  modal.innerHTML = `
-    <div class="modal">
-      <div class="modal-head">
-        <div>
-          <div id="dayModalTitle" class="modal-title">—</div>
-          <div id="dayModalSub" class="modal-sub">—</div>
-        </div>
-        <button id="dayModalClose" class="modal-close" aria-label="Close">✕</button>
-      </div>
+  // last date with emails
+  const maxMs = valid.reduce((m,g)=>Math.max(m,g.date.getTime()), 0);
+  const end = new Date(maxMs);
+  const start = new Date(end.getTime() - 14*24*60*60*1000);
 
-      <div class="modal-body">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>المشروع</th>
-                <th>عدد الإيميلات</th>
-                <th>صافي القيمة</th>
-                <th>المصروف</th>
-                <th>المتبقي</th>
-                <th>%</th>
-              </tr>
-            </thead>
-            <tbody id="dayModalRows"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  `;
+  const days = [];
+  const base = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  for(let i=0;i<15;i++){
+    const d = new Date(base.getTime());
+    d.setUTCDate(d.getUTCDate()+i);
+    days.push(d);
+  }
 
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function openDayModal(dayLabelStr, groupsScope){
-  const modal = ensureDayModal();
-  const title = document.getElementById("dayModalTitle");
-  const sub = document.getElementById("dayModalSub");
-  const tbody = document.getElementById("dayModalRows");
-
-  const items = (groupsScope || []).filter(g => g.day === dayLabelStr && g.total > 0);
-
-  const dayTotal = items.reduce((a,x)=>a+x.total,0);
-  const dayPaid  = items.reduce((a,x)=>a+x.paid,0);
-  const dayRemain = Math.max(0, dayTotal - dayPaid);
-  const dayPct = dayTotal > 0 ? clamp(Math.round((dayPaid/dayTotal)*100), 0, 100) : 0;
-
-  title.textContent = `ملخص يوم: ${dayLabelStr}`;
-  sub.textContent = items.length
-    ? `عدد الإيميلات: ${items.length} | إجمالي: ${fmtMoney(dayTotal)} | المصروف: ${fmtMoney(dayPaid)} | المتبقي: ${fmtMoney(dayRemain)} | ${dayPct}%`
-    : `لا توجد إيميلات في هذا اليوم`;
-
-  const byProject = new Map();
-  items.forEach(g=>{
-    const p = g.project || "(بدون مشروع)";
-    if (!byProject.has(p)) byProject.set(p, { project:p, count:0, total:0, paid:0 });
-    const a = byProject.get(p);
-    a.count += 1;
-    a.total += g.total;
-    a.paid  += g.paid;
+  const agg = new Map();
+  days.forEach(d => agg.set(dayLabel(d), { total: 0, paid: 0 }));
+  valid.forEach(g=>{
+    if (agg.has(g.day)){
+      const a = agg.get(g.day);
+      a.total += g.total;
+      a.paid  += g.paid;
+    }
   });
 
-  const rows = Array.from(byProject.values())
-    .map(x=>{
-      const remain = Math.max(0, x.total - x.paid);
-      const pct = x.total > 0 ? clamp(Math.round((x.paid/x.total)*100), 0, 100) : 0;
-      return { ...x, remain, pct };
-    })
-    .sort((a,b)=> b.total - a.total);
+  chart.innerHTML = days.map(d=>{
+    const dl = dayLabel(d);
+    const a = agg.get(dl) || { total:0, paid:0 };
 
-  tbody.innerHTML = rows.map(r=>`
-    <tr>
-      <td>${escHtml(r.project)}</td>
-      <td>${r.count}</td>
-      <td>${fmtMoney(r.total)}</td>
-      <td>${fmtMoney(r.paid)}</td>
-      <td>${fmtMoney(r.remain)}</td>
-      <td>${r.pct}%</td>
-    </tr>
-  `).join("");
+    const has = a.total > 0;
+    const pct = has ? clamp(Math.round((a.paid / a.total) * 100), 0, 100) : 0;
 
-  modal.classList.add("show");
-  modal.setAttribute("aria-hidden","false");
+    // keep bar shape stable: days with emails = full height, only percent differs
+    const stackHeight = has ? 100 : 0;
+    const paidExtraStyle = (has && pct > 0 && pct < 10) ? "min-height:18px;" : "";
 
-  const close = ()=>{
-    modal.classList.remove("show");
-    modal.setAttribute("aria-hidden","true");
-    document.getElementById("dayModalClose").removeEventListener("click", close);
-    modal.removeEventListener("click", onBackdrop);
-    document.removeEventListener("keydown", onEsc);
-  };
-  const onBackdrop = (e)=>{ if(e.target===modal) close(); };
-  const onEsc = (e)=>{ if(e.key==="Escape") close(); };
+    return `
+      <div class="chart-group" data-day="${dl}">
+        <div class="chart-bars" title="${has ? `Total: ${fmtMoney(a.total)} | Paid: ${fmtMoney(a.paid)} | ${pct}%` : "No emails"}">
+          <div class="bar-stack" style="height:${stackHeight}%; overflow:visible;">
+            <div class="bar-top-value">${has ? fmtMoney(a.total) : ""}</div>
+            ${has ? `
+              <div class="bar-paid" style="height:${pct}%; ${paidExtraStyle}">
+                <div class="bar-percent">${pct}%</div>
+              </div>
+            ` : ``}
+          </div>
+        </div>
+        <div class="chart-day">${dl}</div>
+      </div>
+    `;
+  }).join("");
 
-  document.getElementById("dayModalClose").addEventListener("click", close);
-  modal.addEventListener("click", onBackdrop);
-  document.addEventListener("keydown", onEsc);
+  // click day -> set day filter and rerender
+  chart.querySelectorAll(".chart-group").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const day = el.getAttribute("data-day");
+      $("day_key").value = day;
+      render();
+    });
+  });
 }
 
 // ============================
-// Email Modal (per email/group)
+// Modal (per email group)
 // ============================
 function openModal(group){
   const modal = $("emailModal");
@@ -605,10 +413,9 @@ function openModal(group){
 
   $("modalTitle").textContent = `${group.sector} — ${group.project}`;
   $("modalSub").textContent =
-    `اليوم: ${group.day} | الوقت: ${group.time} | صافي القيمة: ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
+    `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي (بعد الملغي): ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
 
-  const rows = [...group.rows];
-  $("modalRows").innerHTML = rows.map((r,idx)=>{
+  $("modalRows").innerHTML = group.rows.map((r,idx)=>{
     const eff = r.effective_total;
     const paid = r.amount_paid;
     const rem = Math.max(0, eff - paid);
@@ -643,74 +450,7 @@ function openModal(group){
 }
 
 // ============================
-// Chart
-// ============================
-function renderChart(groupsScope){
-  const chart = $("chart");
-  chart.innerHTML = "";
-
-  const valid = (groupsScope || []).filter(g => g?.date instanceof Date && !isNaN(g.date.getTime()));
-  if (!valid.length) return;
-
-  const maxMs = valid.reduce((m,g)=>Math.max(m,g.date.getTime()), 0);
-  const end = new Date(maxMs);
-  const start = new Date(end.getTime() - 14*24*60*60*1000);
-
-  const days = [];
-  const base = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
-  for(let i=0;i<15;i++){
-    const d = new Date(base.getTime());
-    d.setUTCDate(d.getUTCDate()+i);
-    days.push(d);
-  }
-
-  const agg = new Map();
-  days.forEach(d => agg.set(dayLabel(d), { total: 0, paid: 0 }));
-  valid.forEach(g=>{
-    if (agg.has(g.day)){
-      const a = agg.get(g.day);
-      a.total += g.total;
-      a.paid  += g.paid;
-    }
-  });
-
-  chart.innerHTML = days.map(d=>{
-    const dl = dayLabel(d);
-    const a = agg.get(dl) || { total:0, paid:0 };
-
-    const has = a.total > 0;
-    const pct = has ? clamp(Math.round((a.paid / a.total) * 100), 0, 100) : 0;
-
-    const stackHeight = has ? 100 : 0;
-    const paidExtraStyle = (has && pct > 0 && pct < 10) ? "min-height:18px;" : "";
-
-    return `
-      <div class="chart-group" data-day="${dl}">
-        <div class="chart-bars" title="${has ? `Total: ${fmtMoney(a.total)} | Paid: ${fmtMoney(a.paid)} | ${pct}%` : "No emails"}">
-          <div class="bar-stack" style="height:${stackHeight}%; overflow:visible;">
-            <div class="bar-top-value">${has ? fmtMoney(a.total) : ""}</div>
-            ${has ? `
-              <div class="bar-paid" style="height:${pct}%; ${paidExtraStyle}">
-                <div class="bar-percent">${pct}%</div>
-              </div>
-            ` : ``}
-          </div>
-        </div>
-        <div class="chart-day">${dl}</div>
-      </div>
-    `;
-  }).join("");
-
-  chart.querySelectorAll(".chart-group").forEach(el=>{
-    el.addEventListener("click", ()=>{
-      const day = el.getAttribute("data-day");
-      openDayModal(day, valid);
-    });
-  });
-}
-
-// ============================
-// KPI: Top project
+// KPIs
 // ============================
 function setTopProjectKPIs(groups){
   const byProjectCount = new Map();
@@ -753,35 +493,29 @@ function setTopProjectKPIs(groups){
 // Render
 // ============================
 function render(){
-  const emailRows = rowsEmailsOnly(data).filter(filterRowByControls);
-  const groupsAll = groupEmails(emailRows);
-  const groups = filterGroups(groupsAll);
+  groupsView = filterGroups();
 
-  const totalEff = groups.reduce((a,g)=>a+g.total,0);
-  const paid = groups.reduce((a,g)=>a+g.paid,0);
+  const totalEff = groupsView.reduce((a,g)=>a+g.total,0);
+  const paid = groupsView.reduce((a,g)=>a+g.paid,0);
 
-  $("kpi_emails").textContent = String(groups.length);
+  $("kpi_emails").textContent = String(groupsView.length);
   $("kpi_total_amount").textContent = fmtMoney(totalEff);
   $("kpi_paid_amount").textContent = fmtMoney(paid);
 
-  setTopProjectKPIs(groups);
+  setTopProjectKPIs(groupsView);
 
   const sectorText = $("sector").selectedOptions[0]?.textContent || "الكل";
   const projectText = $("project").value || "الكل";
-  const regionText = $("region")?.selectedOptions?.[0]?.textContent || "الكل";
-  const statusText = $("status")?.selectedOptions?.[0]?.textContent || "الكل";
-
-  const { fromUTC, toUTC } = getFilterRange();
-  const fromTxt = fromUTC ? formatIsoDate(fromUTC) : "—";
-  const toTxt = toUTC ? formatIsoDate(toUTC) : "—";
+  const dayText = normText($("day_key").value) || "الكل";
 
   $("meta").textContent =
-    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | منطقة: ${regionText} | حالة: ${statusText} | من: ${fromTxt} | إلى: ${toTxt}`;
+    `المعروض: ${groupsView.length} | قطاع: ${sectorText} | مشروع: ${projectText} | اليوم: ${dayText}`;
 
+  // chart always based on all groups (not filtered by day)
   renderChart(groupsAll);
 
-  // sort: newest day first, within day by time (AM then PM)
-  const sorted = [...groups].sort((a,b)=>{
+  // table: sorted (day desc, then time asc AM->PM)
+  const sorted = [...groupsView].sort((a,b)=>{
     const d = b.date.getTime() - a.date.getTime();
     if (d !== 0) return d;
     return (a.timeMin ?? 999999) - (b.timeMin ?? 999999);
@@ -799,8 +533,6 @@ function render(){
         <td>${escHtml(g.time)}</td>
         <td>${fmtMoney(g.total)}</td>
         <td>${fmtMoney(g.paid)}</td>
-        <td>${fmtMoney(remain)}</td>
-        <td>${pct}%</td>
       </tr>
     `;
   }).join("");
@@ -808,7 +540,7 @@ function render(){
   $("detail_rows").querySelectorAll("tr").forEach(tr=>{
     tr.addEventListener("click", ()=>{
       const key = tr.getAttribute("data-key");
-      const g = groups.find(x=>x.key===key) || groupsAll.find(x=>x.key===key);
+      const g = groupsView.find(x=>x.key===key) || groupsAll.find(x=>x.key===key);
       if (g) openModal(g);
     });
   });
@@ -818,6 +550,12 @@ function render(){
 // Init
 // ============================
 async function init(){
+  // basic guards (لو Papa مش متاح، هنطلع رسالة واضحة بدل ما تختفي الداتا)
+  if (typeof Papa === "undefined"){
+    alert("PapaParse غير محمّل. تأكد إن <script papaparse> موجود قبل email_analysis.js");
+    return;
+  }
+
   const res = await fetch(DATA_SOURCE.cashCsvUrl, { cache:"no-store" });
   if(!res.ok){
     alert("مش قادر أقرأ الداتا من Google Sheets");
@@ -827,6 +565,7 @@ async function init(){
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
+  // sector -> projects map
   projectsBySector = new Map();
   data.forEach(r=>{
     if (!r.projectKey) return;
@@ -834,60 +573,36 @@ async function init(){
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
+  // build sector dropdown
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = $("sector");
   sectorSel.innerHTML =
     `<option value="">الكل</option>` +
     sectorKeys.map(sk => `<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
+  // build project dropdown
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
-  buildRegionDropdown();
 
-  // Calendar wiring
-  $("date_from_btn").addEventListener("click", ()=> $("date_from_pick").showPicker ? $("date_from_pick").showPicker() : $("date_from_pick").click());
-  $("date_to_btn").addEventListener("click", ()=> $("date_to_pick").showPicker ? $("date_to_pick").showPicker() : $("date_to_pick").click());
+  // group data once
+  groupsAll = groupEmails(data);
 
-  $("date_from_pick").addEventListener("change", (e)=>{
-    const v = e.target.value;
-    const d = parseDateSmart(v);
-    if (d) $("date_from_txt").value = formatIsoDate(d);
-    render();
-  });
-  $("date_to_pick").addEventListener("change", (e)=>{
-    const v = e.target.value;
-    const d = parseDateSmart(v);
-    if (d) $("date_to_txt").value = formatIsoDate(d);
-    render();
-  });
+  // day datalist
+  buildDayDatalist(groupsAll);
 
-  $("date_from_txt").addEventListener("input", (e)=>{
-    autoSlashDateInput(e.target);
-    render();
-  });
-  $("date_to_txt").addEventListener("input", (e)=>{
-    autoSlashDateInput(e.target);
-    render();
-  });
-
+  // listeners (متوافقة مع HTML الحالي)
   $("sector").addEventListener("change", ()=>{
     rebuildProjectDropdownForSector();
     render();
   });
 
-  ["project","status","region"].forEach(id=>{
-    $(id).addEventListener("change", render);
-    $(id).addEventListener("input", render);
-  });
+  $("project").addEventListener("change", render);
+  $("day_key").addEventListener("input", render);
+  $("day_key").addEventListener("change", render);
 
   $("clearBtn").addEventListener("click", ()=>{
     $("sector").value = "";
     rebuildProjectDropdownForSector();
-    $("status").value = "";
-    $("region").value = "";
-    $("date_from_txt").value = "";
-    $("date_to_txt").value = "";
-    $("date_from_pick").value = "";
-    $("date_to_pick").value = "";
+    $("day_key").value = "";
     render();
   });
 
