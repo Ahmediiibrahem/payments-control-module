@@ -7,10 +7,6 @@ let projectsBySector = new Map();
 let sectorLabelByKey = new Map();
 let projectLabelByKey = new Map();
 
-// ✅ Region: fallback map from sa.json + GeoJSON holder (for map)
-let regionNameByCode = new Map();
-let regionGeo = null;
-
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const $ = (id) => document.getElementById(id);
 
@@ -216,117 +212,6 @@ function parseCSV(text) {
 }
 
 // ============================
-// ✅ Load Region map from sa.json (GeoJSON) as fallback + map rendering
-// ============================
-async function loadRegionGeoMap(){
-  try{
-    const res = await fetch("./assets/data/sa.json", { cache:"no-store" });
-    if(!res.ok) return;
-
-    const geo = await res.json();
-    regionGeo = geo;
-
-    const m = new Map();
-    (geo.features || []).forEach(f=>{
-      const code = String(f?.id || f?.properties?.id || "").trim().toUpperCase();
-      const name = String(f?.properties?.name || "").trim();
-      if (code) m.set(code, name || code);
-    });
-
-    regionNameByCode = m;
-  }catch(e){
-    console.warn("Failed to load sa.json:", e);
-  }
-}
-
-// ============================
-// Region Map Dropdown
-// ============================
-function getRegionCode(){
-  return normText($("region")?.value).toUpperCase();
-}
-
-function getRegionLabelByCode(code){
-  if (!code) return "الكل";
-  return regionNameByCode.get(code) || code;
-}
-
-function setRegionValue(code){
-  const regionInput = $("region");
-  const btn = $("regionBtn");
-
-  const c = normText(code).toUpperCase();
-  if (regionInput) regionInput.value = c || "";
-
-  if (btn){
-    const label = getRegionLabelByCode(c);
-    btn.textContent = `${label} ▾`;
-  }
-
-  // highlight selected path
-  const svg = $("regionSvg");
-  if (svg){
-    svg.querySelectorAll(".region-path").forEach(p=>{
-      p.classList.toggle("selected", (p.getAttribute("data-code") === c));
-    });
-  }
-}
-
-function openRegionMenu(){
-  const menu = $("regionMenu");
-  if (!menu) return;
-  menu.classList.add("show");
-  menu.setAttribute("aria-hidden","false");
-}
-
-function closeRegionMenu(){
-  const menu = $("regionMenu");
-  if (!menu) return;
-  menu.classList.remove("show");
-  menu.setAttribute("aria-hidden","true");
-}
-
-function renderRegionMap(){
-  if (!regionGeo || !window.d3) return;
-
-  const svg = $("regionSvg");
-  if (!svg) return;
-
-  svg.innerHTML = "";
-
-  const w = 440;
-  const h = 320;
-  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-
-  const d3 = window.d3;
-  const projection = d3.geoMercator().fitSize([w, h], regionGeo);
-  const pathGen = d3.geoPath(projection);
-
-  (regionGeo.features || []).forEach(f=>{
-    const code = String(f?.id || f?.properties?.id || "").trim().toUpperCase();
-    const d = pathGen(f);
-    if (!code || !d) return;
-
-    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    p.setAttribute("d", d);
-    p.setAttribute("data-code", code);
-    p.setAttribute("class", "region-path");
-    p.setAttribute("title", getRegionLabelByCode(code));
-
-    p.addEventListener("click", ()=>{
-      setRegionValue(code);
-      closeRegionMenu();
-      render();
-    });
-
-    svg.appendChild(p);
-  });
-
-  // apply selected state
-  setRegionValue(getRegionCode());
-}
-
-// ============================
 // Pick Exacttime
 // ============================
 function pickExactTimeFromRaw(raw){
@@ -414,16 +299,15 @@ function normalizeRow(raw) {
   const effective_total = Math.max(0, amount_total - amount_canceled);
   const effective_remaining = Math.max(0, effective_total - amount_paid);
 
-  // ✅ Region (from sheet) + fallback name (from sa.json)
-  const region_code = normText(row.region_code).toUpperCase();   // SA01..SA14
-  const region_name = normText(row.region_name) || (region_code ? (regionNameByCode.get(region_code) || "") : "");
+  // ✅ Region from sheet
+  const region_code = normText(row.region_code).toUpperCase(); // SA01..SA14
+  const region_name = normText(row.region_name);               // display name from sheet
 
   return {
     sectorKey, projectKey,
     sector: sectorLabel,
     project: projectLabel,
 
-    // ✅ Region fields
     region_code,
     region_name,
 
@@ -456,7 +340,7 @@ function normalizeRow(raw) {
 }
 
 // ============================
-// Dropdown Helpers (Sector/Project)
+// Dropdown Helpers
 // ============================
 function uniqSorted(arr) {
   return Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -486,6 +370,26 @@ function rebuildProjectDropdownForSector() {
   setSelectOptions("project", projects, true);
 }
 
+function buildRegionDropdown(){
+  const sel = $("region");
+  if (!sel) return;
+
+  const codes = uniqSorted(data.map(r => r.region_code).filter(Boolean));
+
+  // name preference: RegionName from sheet; fallback: show code
+  const nameMap = new Map();
+  data.forEach(r=>{
+    if (r.region_code && r.region_name) nameMap.set(r.region_code, r.region_name);
+  });
+
+  sel.innerHTML =
+    `<option value="">الكل</option>` +
+    codes.map(code=>{
+      const nm = nameMap.get(code) || code;
+      return `<option value="${code}">${nm}</option>`;
+    }).join("");
+}
+
 // ============================
 // Filtering + Grouping
 // ============================
@@ -508,7 +412,7 @@ function filterRowByControls(r){
   const projectLabel = $("project").value;
   const projectKey = normText(projectLabel);
 
-  const regionCode = getRegionCode(); // ✅ from hidden input
+  const regionCode = normText($("region")?.value).toUpperCase();
   const status = $("status")?.value || "";
   const { fromUTC, toUTC } = getFilterRange();
 
@@ -536,9 +440,8 @@ function groupEmails(rows){
         sector:r.sector,
         project:r.project,
 
-        // ✅ Region on group
-        region_code: r.region_code,
-        region_name: r.region_name,
+        region_code:r.region_code,
+        region_name:r.region_name,
 
         time:r.time,
         timeMin:r._timeMin,
@@ -565,7 +468,7 @@ function filterGroups(groups){
   const projectLabel = $("project").value;
   const projectKey = normText(projectLabel);
 
-  const regionCode = getRegionCode(); // ✅
+  const regionCode = normText($("region")?.value).toUpperCase();
   const status = $("status")?.value || "";
   const { fromUTC, toUTC } = getFilterRange();
 
@@ -865,7 +768,7 @@ function render(){
 
   const sectorText = $("sector").selectedOptions[0]?.textContent || "الكل";
   const projectText = $("project").value || "الكل";
-  const regionText = getRegionLabelByCode(getRegionCode());
+  const regionText = $("region")?.selectedOptions?.[0]?.textContent || "الكل";
   const statusText = $("status")?.selectedOptions?.[0]?.textContent || "الكل";
 
   const { fromUTC, toUTC } = getFilterRange();
@@ -915,9 +818,6 @@ function render(){
 // Init
 // ============================
 async function init(){
-  // ✅ load geo map (for names + map UI)
-  await loadRegionGeoMap();
-
   const res = await fetch(DATA_SOURCE.cashCsvUrl, { cache:"no-store" });
   if(!res.ok){
     alert("مش قادر أقرأ الداتا من Google Sheets");
@@ -927,7 +827,6 @@ async function init(){
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
-  // Sector -> projects map
   projectsBySector = new Map();
   data.forEach(r=>{
     if (!r.projectKey) return;
@@ -935,17 +834,16 @@ async function init(){
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
-  // Build sector dropdown
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   const sectorSel = $("sector");
   sectorSel.innerHTML =
     `<option value="">الكل</option>` +
     sectorKeys.map(sk => `<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
-  // Build project dropdown
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
+  buildRegionDropdown();
 
-  // ===== Calendar buttons wiring
+  // Calendar wiring
   $("date_from_btn").addEventListener("click", ()=> $("date_from_pick").showPicker ? $("date_from_pick").showPicker() : $("date_from_pick").click());
   $("date_to_btn").addEventListener("click", ()=> $("date_to_pick").showPicker ? $("date_to_pick").showPicker() : $("date_to_pick").click());
 
@@ -962,7 +860,6 @@ async function init(){
     render();
   });
 
-  // Auto slash on typing
   $("date_from_txt").addEventListener("input", (e)=>{
     autoSlashDateInput(e.target);
     render();
@@ -972,55 +869,21 @@ async function init(){
     render();
   });
 
-  // Sector change -> rebuild projects
   $("sector").addEventListener("change", ()=>{
     rebuildProjectDropdownForSector();
     render();
   });
 
-  // Project + status changes
-  ["project","status"].forEach(id=>{
+  ["project","status","region"].forEach(id=>{
     $(id).addEventListener("change", render);
     $(id).addEventListener("input", render);
   });
 
-  // ===== Region Map Dropdown wiring
-  if ($("regionBtn") && $("regionMenu")) {
-    $("regionBtn").addEventListener("click", ()=>{
-      const menu = $("regionMenu");
-      menu.classList.contains("show") ? closeRegionMenu() : openRegionMenu();
-    });
-
-    $("regionClose")?.addEventListener("click", closeRegionMenu);
-
-    $("regionClear")?.addEventListener("click", ()=>{
-      setRegionValue("");
-      closeRegionMenu();
-      render();
-    });
-
-    document.addEventListener("click", (e)=>{
-      const wrap = $("regionSelect");
-      if (!wrap) return;
-      if (!wrap.contains(e.target)) closeRegionMenu();
-    });
-
-    // render the geo map once
-    renderRegionMap();
-
-    // initial state
-    setRegionValue(getRegionCode() || "");
-  } else {
-    // fallback (لو عناصر الخريطة مش موجودة لأي سبب)
-    setRegionValue(getRegionCode() || "");
-  }
-
-  // Clear button
   $("clearBtn").addEventListener("click", ()=>{
     $("sector").value = "";
     rebuildProjectDropdownForSector();
     $("status").value = "";
-    setRegionValue("");
+    $("region").value = "";
     $("date_from_txt").value = "";
     $("date_to_txt").value = "";
     $("date_from_pick").value = "";
