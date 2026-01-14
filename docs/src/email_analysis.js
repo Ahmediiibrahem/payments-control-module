@@ -7,6 +7,9 @@ let projectsBySector = new Map();
 let sectorLabelByKey = new Map();
 let projectLabelByKey = new Map();
 
+// ✅ Region: fallback map from sa.json
+let regionNameByCode = new Map();
+
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const $ = (id) => document.getElementById(id);
 
@@ -212,6 +215,29 @@ function parseCSV(text) {
 }
 
 // ============================
+// ✅ Load Region map from sa.json (GeoJSON) as fallback
+// ============================
+async function loadRegionGeoMap(){
+  try{
+    const res = await fetch("./assets/data/sa.json", { cache:"no-store" });
+    if(!res.ok) return;
+
+    const geo = await res.json();
+    const m = new Map();
+
+    (geo.features || []).forEach(f=>{
+      const code = String(f?.id || f?.properties?.id || "").trim().toUpperCase();
+      const name = String(f?.properties?.name || "").trim();
+      if (code) m.set(code, name || code);
+    });
+
+    regionNameByCode = m;
+  }catch(e){
+    console.warn("Failed to load sa.json:", e);
+  }
+}
+
+// ============================
 // Pick Exacttime
 // ============================
 function pickExactTimeFromRaw(raw){
@@ -299,10 +325,19 @@ function normalizeRow(raw) {
   const effective_total = Math.max(0, amount_total - amount_canceled);
   const effective_remaining = Math.max(0, effective_total - amount_paid);
 
+  // ✅ Region (from sheet) + fallback name (from sa.json)
+  const region_code = normText(row.region_code).toUpperCase();   // SA01..SA14
+  const region_name = normText(row.region_name) || (region_code ? (regionNameByCode.get(region_code) || "") : "");
+
   return {
     sectorKey, projectKey,
     sector: sectorLabel,
     project: projectLabel,
+
+    // ✅ Region fields
+    region_code,
+    region_name,
+
     vendor,
     code: normText(row.code),
     request_id: normText(row.request_id),
@@ -383,11 +418,14 @@ function filterRowByControls(r){
   const sectorKey = $("sector").value;
   const projectLabel = $("project").value;
   const projectKey = normText(projectLabel);
+
+  const regionCode = $("region")?.value || "";  // ✅ NEW
   const status = $("status")?.value || "";
   const { fromUTC, toUTC } = getFilterRange();
 
   if (sectorKey && r.sectorKey !== sectorKey) return false;
   if (projectKey && r.projectKey !== projectKey) return false;
+  if (regionCode && r.region_code !== regionCode) return false;  // ✅ NEW
   if (status && r._status !== status) return false;
   if ((fromUTC || toUTC) && !inRangeUTC(r._emailDate, fromUTC, toUTC)) return false;
 
@@ -408,6 +446,11 @@ function groupEmails(rows){
         projectKey:r.projectKey,
         sector:r.sector,
         project:r.project,
+
+        // ✅ Region on group
+        region_code: r.region_code,
+        region_name: r.region_name,
+
         time:r.time,
         timeMin:r._timeMin,
         day:dlab,
@@ -432,12 +475,15 @@ function filterGroups(groups){
   const sectorKey = $("sector").value;
   const projectLabel = $("project").value;
   const projectKey = normText(projectLabel);
+
+  const regionCode = $("region")?.value || "";  // ✅ NEW
   const status = $("status")?.value || "";
   const { fromUTC, toUTC } = getFilterRange();
 
   return groups.filter(g=>{
     if (sectorKey && g.sectorKey !== sectorKey) return false;
     if (projectKey && g.projectKey !== projectKey) return false;
+    if (regionCode && g.region_code !== regionCode) return false; // ✅ NEW
     if (status && g.status !== status) return false;
     if ((fromUTC || toUTC) && !inRangeUTC(g.date, fromUTC, toUTC)) return false;
     return true;
@@ -556,7 +602,7 @@ function openDayModal(dayLabelStr, groupsScope){
 }
 
 // ============================
-// ✅ Email Modal (per email/group) — رجّعناه هنا
+// Email Modal (per email/group)
 // ============================
 function openModal(group){
   const modal = $("emailModal");
@@ -730,6 +776,7 @@ function render(){
 
   const sectorText = $("sector").selectedOptions[0]?.textContent || "الكل";
   const projectText = $("project").value || "الكل";
+  const regionText = $("region")?.selectedOptions?.[0]?.textContent || "الكل";
   const statusText = $("status")?.selectedOptions?.[0]?.textContent || "الكل";
 
   const { fromUTC, toUTC } = getFilterRange();
@@ -737,7 +784,7 @@ function render(){
   const toTxt = toUTC ? formatIsoDate(toUTC) : "—";
 
   $("meta").textContent =
-    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | حالة: ${statusText} | من: ${fromTxt} | إلى: ${toTxt}`;
+    `المعروض: ${groups.length} | قطاع: ${sectorText} | مشروع: ${projectText} | منطقة: ${regionText} | حالة: ${statusText} | من: ${fromTxt} | إلى: ${toTxt}`;
 
   renderChart(groupsAll);
 
@@ -766,7 +813,6 @@ function render(){
     `;
   }).join("");
 
-  // ✅ هنا التعديل الأساسي: ننادي openModal مباشرة
   $("detail_rows").querySelectorAll("tr").forEach(tr=>{
     tr.addEventListener("click", ()=>{
       const key = tr.getAttribute("data-key");
@@ -780,6 +826,9 @@ function render(){
 // Init
 // ============================
 async function init(){
+  // ✅ load fallback region map first (optional but useful)
+  await loadRegionGeoMap();
+
   const res = await fetch(DATA_SOURCE.cashCsvUrl, { cache:"no-store" });
   if(!res.ok){
     alert("مش قادر أقرأ الداتا من Google Sheets");
@@ -803,6 +852,22 @@ async function init(){
     sectorKeys.map(sk => `<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
+
+  // ✅ Region dropdown (from data; name from sheet, fallback from sa.json)
+  const regionSel = $("region");
+  const regionCodes = uniqSorted(data.map(r => r.region_code).filter(Boolean));
+
+  const nameFromData = new Map();
+  data.forEach(r=>{
+    if (r.region_code && r.region_name) nameFromData.set(r.region_code, r.region_name);
+  });
+
+  regionSel.innerHTML =
+    `<option value="">الكل</option>` +
+    regionCodes.map(code=>{
+      const nm = nameFromData.get(code) || regionNameByCode.get(code) || code;
+      return `<option value="${code}">${nm}</option>`;
+    }).join("");
 
   // Calendar buttons wiring
   $("date_from_btn").addEventListener("click", ()=> $("date_from_pick").showPicker ? $("date_from_pick").showPicker() : $("date_from_pick").click());
@@ -836,7 +901,8 @@ async function init(){
     render();
   });
 
-  ["project","status"].forEach(id=>{
+  // ✅ include region filter
+  ["project","status","region"].forEach(id=>{
     $(id).addEventListener("change", render);
     $(id).addEventListener("input", render);
   });
@@ -845,6 +911,7 @@ async function init(){
     $("sector").value = "";
     rebuildProjectDropdownForSector();
     $("status").value = "";
+    $("region").value = "";
     $("date_from_txt").value = "";
     $("date_to_txt").value = "";
     $("date_from_pick").value = "";
