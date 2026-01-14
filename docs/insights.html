@@ -1,1 +1,246 @@
 
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Executive Insights | Payments Control</title>
+
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/main.css?v=35">
+</head>
+
+<body>
+  <script type="module">
+    import { requireAuth } from "./src/auth.js";
+    requireAuth();
+  </script>
+
+  <div class="container">
+
+    <div class="topbar">
+      <div class="nav-top nav-fixed">
+        <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
+        <a class="nav-btn" href="./email-analysis.html">E-Mails Analysis</a>
+        <a class="nav-btn" href="./insights.html">Executive Insights</a>
+      </div>
+      <h1 class="page-title">Executive Insights</h1>
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">الفلاتر</div>
+      <div class="filters" style="margin-top:8px;">
+        <div class="filter-row">
+          <label>القطاع:
+            <select id="sector"></select>
+          </label>
+
+          <label>المشروع:
+            <select id="project"></select>
+          </label>
+
+          <label>الحالة:
+            <select id="status">
+              <option value="">الكل</option>
+              <option value="1">بدون اعتماد ولم يحول</option>
+              <option value="2">معتمد ولم يحول</option>
+              <option value="3">معتمد وتم تحويله</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-row">
+          <label>من (ddmmyyyy):
+            <input id="date_from_txt" inputmode="numeric" placeholder="مثال: 12012025" />
+          </label>
+
+          <label>إلى (ddmmyyyy):
+            <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025" />
+          </label>
+
+          <div class="btn-row">
+            <button id="clearBtn">مسح</button>
+          </div>
+        </div>
+
+        <div class="small"><span id="meta">—</span></div>
+      </div>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Executive Summary</div>
+      <div class="small" id="asof" style="margin-top:6px; opacity:.85;">—</div>
+
+      <div class="grid kpi" style="margin-top:10px;">
+        <div class="card kpi-card">
+          <div class="kpi-label">إجمالي الطلبات (بعد الملغي)</div>
+          <div class="kpi-value" id="k_total">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">إجمالي المصروف</div>
+          <div class="kpi-value" id="k_paid">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">إجمالي المتبقي</div>
+          <div class="kpi-value" id="k_remain">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">SLA (≤ 5 أيام)</div>
+          <div class="kpi-value" id="k_sla">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cash Exposure -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Cash Exposure</div>
+      <div class="small" style="margin-top:6px; opacity:.85;">
+        إجمالي المتبقي حسب الحالة
+      </div>
+
+      <div class="grid kpi" style="margin-top:10px;">
+        <div class="card kpi-card">
+          <div class="kpi-label">بدون اعتماد ولم يحول</div>
+          <div class="kpi-value" id="exp_1">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">معتمد ولم يحول</div>
+          <div class="kpi-value" id="exp_2">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">معتمد وتم تحويله (متبقي جزئي)</div>
+          <div class="kpi-value" id="exp_3">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">الإجمالي</div>
+          <div class="kpi-value" id="exp_all">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aging -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Aging Analysis (طلبات غير مكتملة)</div>
+      <div class="small" style="margin-top:6px; opacity:.85;">
+        تقسيم الطلبات حسب عمرها (بالأيام) — محسوب على أساس آخر تاريخ موجود بالداتا
+      </div>
+
+      <div id="agingBars" style="margin-top:10px;"></div>
+
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Bucket</th>
+              <th>عدد الطلبات</th>
+              <th>إجمالي المتبقي</th>
+            </tr>
+          </thead>
+          <tbody id="agingTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Bottlenecks -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Bottlenecks</div>
+      <div class="small" style="margin-top:6px; opacity:.85;">
+        أعلى 10 مشاريع من حيث المتبقي + متوسط عمر الطلبات غير المكتملة
+      </div>
+
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>المشروع</th>
+              <th>عدد الطلبات غير المكتملة</th>
+              <th>إجمالي المتبقي</th>
+              <th>متوسط العمر (يوم)</th>
+            </tr>
+          </thead>
+          <tbody id="bottTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Heatmap-like day-of-week -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Weekday Pattern</div>
+      <div class="small" style="margin-top:6px; opacity:.85;">
+        توزيع المصروف حسب يوم الأسبوع (آخر 30 يوم حسب آخر تاريخ دفع موجود)
+      </div>
+
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>اليوم</th>
+              <th>إجمالي المصروف</th>
+              <th>عدد عمليات الدفع</th>
+            </tr>
+          </thead>
+          <tbody id="weekTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Forecast -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Forecast (بسيط)</div>
+      <div class="small" style="margin-top:6px; opacity:.85;">
+        متوسط مصروف يومي (آخر 30 يوم) + توقع 7 و 14 يوم
+      </div>
+
+      <div class="grid kpi" style="margin-top:10px;">
+        <div class="card kpi-card">
+          <div class="kpi-label">متوسط يومي</div>
+          <div class="kpi-value" id="fc_avg">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">توقع 7 أيام</div>
+          <div class="kpi-value" id="fc_7">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">توقع 14 يوم</div>
+          <div class="kpi-value" id="fc_14">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">ملاحظة</div>
+          <div class="kpi-sub">Forecast مبني على آخر 30 يوم دفع فقط</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Quality -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Data Quality</div>
+      <div class="small" style="margin-top:6px; opacity:.85;">
+        مؤشرات جودة الداتا (نسبة الحقول الناقصة)
+      </div>
+
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>المؤشر</th>
+              <th>النسبة</th>
+              <th>العدد</th>
+            </tr>
+          </thead>
+          <tbody id="dqTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ✅ نفس أسلوب Email Analysis: PapaParse محلي -->
+  <script src="./assets/vendor/papaparse.min.js"></script>
+  <script type="module" src="./src/insights.js"></script>
+</body>
+</html>
