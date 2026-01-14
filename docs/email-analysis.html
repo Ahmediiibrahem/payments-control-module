@@ -75,30 +75,10 @@
             <select id="project"></select>
           </label>
 
-          <!-- ✅ NEW: Region filter -->
+          <!-- ✅ رجعناها Dropdown عادي -->
           <label>المنطقة:
-  <div class="map-select" id="regionSelect">
-    <button type="button" class="map-select-btn" id="regionBtn">الكل ▾</button>
-    <!-- ده اللي الكود هيقرأ منه region_code -->
-    <input type="hidden" id="region" value="" />
-
-    <div class="map-menu" id="regionMenu" aria-hidden="true">
-      <div class="map-menu-head">
-        <div class="map-menu-title">اختر المنطقة</div>
-        <button type="button" class="map-menu-close" id="regionClose">✕</button>
-      </div>
-
-      <div class="map-menu-body">
-        <svg id="regionSvg" class="region-svg"></svg>
-      </div>
-
-      <div class="map-menu-foot">
-        <button type="button" id="regionClear" class="map-menu-clear">الكل</button>
-      </div>
-    </div>
-  </div>
-</label>
-
+            <select id="region"></select>
+          </label>
 
           <label>الحالة:
             <select id="status">
@@ -199,9 +179,8 @@
 
   </div>
 
+  <!-- محلي -->
   <script src="./assets/vendor/papaparse.min.js"></script>
-  <script src="./assets/vendor/d3.min.js"></script>
   <script type="module" src="./src/email_analysis.js"></script>
-
 </body>
 </html>
