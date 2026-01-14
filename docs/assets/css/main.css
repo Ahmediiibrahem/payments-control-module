@@ -371,3 +371,16 @@ tbody tr:hover{background:rgba(255,255,255,.06)}
   color: var(--muted);
   font-weight: 800;
 }
+
+/* =========================
+   Insights Modal: fixed height + scroll
+========================= */
+#insModal .modal{
+  max-height: calc(15 * 1.65em + 140px);
+  width: min(980px, 96vw);
+}
+
+#insModal .modal-body{
+  overflow: auto;
+  max-height: calc(15 * 1.65em + 40px);
+}
