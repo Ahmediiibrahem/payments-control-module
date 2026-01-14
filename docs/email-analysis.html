@@ -23,9 +23,9 @@
 
 <body>
   <script type="module">
-  import { requireAuth } from "./src/auth.js";
-  requireAuth();
-</script>
+    import { requireAuth } from "./src/auth.js";
+    requireAuth();
+  </script>
 
   <div class="container">
 
@@ -73,6 +73,11 @@
 
           <label>المشروع:
             <select id="project"></select>
+          </label>
+
+          <!-- ✅ NEW: Region filter -->
+          <label>المنطقة:
+            <select id="region"></select>
           </label>
 
           <label>الحالة:
