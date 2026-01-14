@@ -1,186 +1,0 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>E-Mails Analysis</title>
-
-  <link rel="icon" type="image/png" href="./assets/favicon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=35">
-
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-GCPTV6MHRT');
-  </script>
-</head>
-
-<body>
-  <script type="module">
-    import { requireAuth } from "./src/auth.js";
-    requireAuth();
-  </script>
-
-  <div class="container">
-
-    <div class="topbar">
-      <div class="nav-top nav-fixed">
-        <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
-        <a class="nav-btn" href="./email-analysis.html">E-Mails Analysis</a>
-      </div>
-      <h1 class="page-title">E-Mails Analysis</h1>
-    </div>
-
-    <!-- KPIs -->
-    <div class="grid kpi">
-      <div class="card kpi-card">
-        <div class="kpi-label">إجمالي الإيميلات</div>
-        <div class="kpi-value" id="kpi_emails">—</div>
-      </div>
-
-      <div class="card kpi-card">
-        <div class="kpi-label">إجمالي طلبات الصرف</div>
-        <div class="kpi-value" id="kpi_total_amount">—</div>
-      </div>
-
-      <div class="card kpi-card">
-        <div class="kpi-label">إجمالي المصروف</div>
-        <div class="kpi-value" id="kpi_paid_amount">—</div>
-      </div>
-
-      <div class="card kpi-card">
-        <div class="kpi-label">أعلى مشروع</div>
-        <div class="kpi-sub" style="margin-top:2px;">
-          بالعدد: <b id="kpi_top_count_project">—</b> (<span id="kpi_top_count_value">—</span>)<br/>
-          بالمصروف: <b id="kpi_top_paid_project">—</b> (<span id="kpi_top_paid_value">—</span>)
-        </div>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="card" style="margin-top:12px;">
-      <div class="filters">
-        <div class="filter-row">
-          <label>القطاع:
-            <select id="sector"></select>
-          </label>
-
-          <label>المشروع:
-            <select id="project"></select>
-          </label>
-
-          <!-- ✅ رجعناها Dropdown عادي -->
-          <label>المنطقة:
-            <select id="region"></select>
-          </label>
-
-          <label>الحالة:
-            <select id="status">
-              <option value="">الكل</option>
-              <option value="1">طلب صرف بدون إعتماد ولم يحول</option>
-              <option value="2">طلب صرف معتمد ولم يحول</option>
-              <option value="3">طلب صرف معتمد وتم تحويلة</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="filter-row">
-          <label>من (ddmmyyyy):
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input id="date_from_txt" inputmode="numeric" placeholder="مثال: 12012025" />
-              <button id="date_from_btn" type="button" title="اختيار من الكاليندر">📅</button>
-              <input id="date_from_pick" type="date" style="display:none;">
-            </div>
-          </label>
-
-          <label>إلى (ddmmyyyy):
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025" />
-              <button id="date_to_btn" type="button" title="اختيار من الكاليندر">📅</button>
-              <input id="date_to_pick" type="date" style="display:none;">
-            </div>
-          </label>
-
-          <div class="btn-row">
-            <button id="clearBtn">مسح</button>
-          </div>
-        </div>
-
-        <div class="small">
-          <span id="meta">—</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Chart -->
-    <div class="card" style="margin-top:12px;">
-      <div class="card-title">قيمة طلبات الصرف (آخر 15 يوم)</div>
-      <div id="chart" class="chart" style="margin-top:10px;"></div>
-    </div>
-
-    <!-- Details table -->
-    <div class="card" style="margin-top:12px;">
-      <div class="card-title">تفاصيل الإيميلات بعد الفلتر</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>اليوم</th>
-              <th>القطاع</th>
-              <th>المشروع</th>
-              <th>الوقت</th>
-              <th>قيمة طلبات الصرف</th>
-              <th>قيمة المصروف</th>
-              <th>المتبقي</th>
-              <th>%</th>
-            </tr>
-          </thead>
-          <tbody id="detail_rows"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Modal (تفاصيل مشروع/إيميل) -->
-    <div id="emailModal" class="modal-backdrop" aria-hidden="true">
-      <div class="modal">
-        <div class="modal-head">
-          <div>
-            <div id="modalTitle" class="modal-title">—</div>
-            <div id="modalSub" class="modal-sub">—</div>
-          </div>
-          <button id="modalClose" class="modal-close" aria-label="Close">✕</button>
-        </div>
-
-        <div class="modal-body">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>م</th>
-                  <th>الكود</th>
-                  <th>اسم المورد</th>
-                  <th>صافي القيمة</th>
-                  <th>المنصرف</th>
-                  <th>المتبقي</th>
-                </tr>
-              </thead>
-              <tbody id="modalRows"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- محلي -->
-  <script src="./assets/vendor/papaparse.min.js"></script>
-  <script type="module" src="./src/email_analysis.js"></script>
-</body>
-</html>
