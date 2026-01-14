@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=36">
+  <link rel="stylesheet" href="./assets/css/main.css?v=37">
 </head>
 
 <body>
@@ -80,16 +80,18 @@
           <div class="kpi-label">إجمالي الطلبات (بعد الملغي)</div>
           <div class="kpi-value" id="k_total">—</div>
         </div>
+
         <div class="card kpi-card">
           <div class="kpi-label">إجمالي المصروف</div>
           <div class="kpi-value" id="k_paid">—</div>
         </div>
+
         <div class="card kpi-card">
           <div class="kpi-label">إجمالي المتبقي</div>
           <div class="kpi-value" id="k_remain">—</div>
         </div>
 
-        <!-- ✅ SLA Card (3 lines + Base explanation) -->
+        <!-- SLA (3 lines only - no notes) -->
         <div class="card kpi-card">
           <div class="kpi-label">SLA (≤ 5 أيام) — بالقيم</div>
 
@@ -102,8 +104,6 @@
           <div class="kpi-sub" style="margin-top:6px;">
             النسبة: <b id="sla_pct">—</b>
           </div>
-
-          <div class="small" id="sla_note" style="margin-top:8px; opacity:.85;">—</div>
         </div>
       </div>
     </div>
@@ -111,9 +111,6 @@
     <!-- Cash Exposure -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">Cash Exposure</div>
-      <div class="small" style="margin-top:6px; opacity:.85;">
-        (أول 3 كروت = متبقي حسب الحالة + عدد الإيميلات) — الكارت الأخير = إجمالي المطالبات
-      </div>
 
       <div class="grid kpi" style="margin-top:10px;">
         <div class="card kpi-card">
@@ -134,8 +131,9 @@
           <button id="exp_3_count" class="nav-btn" style="margin-top:8px; width:100%; opacity:.9;">عدد الإيميلات: —</button>
         </div>
 
+        <!-- ✅ Card 4: Remaining only -->
         <div class="card kpi-card">
-          <div class="kpi-label">إجمالي المطالبات (بعد الملغي)</div>
+          <div class="kpi-label">إجمالي المتبقي (بعد الملغي)</div>
           <div class="kpi-value" id="exp_all">—</div>
           <button id="exp_all_count" class="nav-btn" style="margin-top:8px; width:100%; opacity:.9;">عدد الصفوف: —</button>
         </div>
@@ -256,7 +254,7 @@
       </div>
     </div>
 
-    <!-- ✅ Modal (fixed height + scroll via CSS) -->
+    <!-- Modal -->
     <div id="insModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal">
         <div class="modal-head">
@@ -264,7 +262,11 @@
             <div id="insModalTitle" class="modal-title">—</div>
             <div id="insModalSub" class="modal-sub">—</div>
           </div>
-          <button id="insModalClose" class="modal-close" aria-label="Close">✕</button>
+
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="insModalBack" class="nav-btn" style="display:none; opacity:.9;">↩ رجوع</button>
+            <button id="insModalClose" class="modal-close" aria-label="Close">✕</button>
+          </div>
         </div>
 
         <div class="modal-body">
