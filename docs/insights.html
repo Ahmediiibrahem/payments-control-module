@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=35">
+  <link rel="stylesheet" href="./assets/css/main.css?v=36">
 </head>
 
 <body>
@@ -89,7 +89,7 @@
           <div class="kpi-value" id="k_remain">—</div>
         </div>
 
-        <!-- ✅ SLA Card (3 lines) -->
+        <!-- ✅ SLA Card (3 lines + Base explanation) -->
         <div class="card kpi-card">
           <div class="kpi-label">SLA (≤ 5 أيام) — بالقيم</div>
 
@@ -102,6 +102,8 @@
           <div class="kpi-sub" style="margin-top:6px;">
             النسبة: <b id="sla_pct">—</b>
           </div>
+
+          <div class="small" id="sla_note" style="margin-top:8px; opacity:.85;">—</div>
         </div>
       </div>
     </div>
@@ -254,7 +256,7 @@
       </div>
     </div>
 
-    <!-- Modal -->
+    <!-- ✅ Modal (fixed height + scroll via CSS) -->
     <div id="insModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal">
         <div class="modal-head">
