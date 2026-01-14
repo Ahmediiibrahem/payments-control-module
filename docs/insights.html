@@ -88,10 +88,20 @@
           <div class="kpi-label">إجمالي المتبقي</div>
           <div class="kpi-value" id="k_remain">—</div>
         </div>
+
+        <!-- ✅ SLA Card (3 lines) -->
         <div class="card kpi-card">
-          <div class="kpi-label">SLA (≤ 5 أيام)</div>
-          <div class="kpi-value" id="k_sla">—</div>
-          <div class="kpi-sub" style="margin-top:2px;">محسوب على قيمة المصروف</div>
+          <div class="kpi-label">SLA (≤ 5 أيام) — بالقيم</div>
+
+          <div class="kpi-sub" style="margin-top:6px;">
+            إجمالي: <b id="sla_total">—</b>
+          </div>
+          <div class="kpi-sub" style="margin-top:6px;">
+            المنصرف: <b id="sla_paid">—</b>
+          </div>
+          <div class="kpi-sub" style="margin-top:6px;">
+            النسبة: <b id="sla_pct">—</b>
+          </div>
         </div>
       </div>
     </div>
@@ -130,7 +140,7 @@
       </div>
     </div>
 
-    <!-- باقي الصفحة زي ما هي (Aging / Bottlenecks / Weekday / Forecast / DQ) -->
+    <!-- Aging -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">Aging Analysis (طلبات غير مكتملة)</div>
       <div class="small" style="margin-top:6px; opacity:.85;">
@@ -153,6 +163,7 @@
       </div>
     </div>
 
+    <!-- Bottlenecks -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">Bottlenecks</div>
       <div class="small" style="margin-top:6px; opacity:.85;">
@@ -174,6 +185,7 @@
       </div>
     </div>
 
+    <!-- Weekday Pattern -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">Weekday Pattern</div>
       <div class="small" style="margin-top:6px; opacity:.85;">
@@ -194,6 +206,7 @@
       </div>
     </div>
 
+    <!-- Forecast -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">Forecast (بسيط)</div>
       <div class="small" style="margin-top:6px; opacity:.85;">
@@ -220,6 +233,7 @@
       </div>
     </div>
 
+    <!-- Data Quality -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">Data Quality</div>
       <div class="small" style="margin-top:6px; opacity:.85;">
@@ -240,7 +254,7 @@
       </div>
     </div>
 
-    <!-- Modal واحد لكل Popups -->
+    <!-- Modal -->
     <div id="insModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal">
         <div class="modal-head">
