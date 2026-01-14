@@ -5,7 +5,7 @@ const SESSION_KEY = "pc_auth_ok";
 
 // ✅ غيّر دول للي انت عايزه
 const USERS = [
-  { user: "admin", pass: "1902" },
+  { user: "yassin", pass: "1902" },
   // { user: "ahmed", pass: "0000" },
 ];
 
