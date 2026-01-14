@@ -1,63 +1,96 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Login</title>
+  <title>Login | Payments Control</title>
 
-  <link rel="icon" type="image/png" href="./assets/favicon.png">
-  <link rel="stylesheet" href="./assets/css/main.css?v=35">
+  <link rel="icon" type="image/png" href="./assets/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/main.css?v=35">
 </head>
 
 <body>
-  <div class="container">
-    <div class="topbar">
-      <h1 class="page-title">Payments Control</h1>
-    </div>
-
-    <div class="card" style="max-width:480px;margin:40px auto;">
-      <div class="card-title">تسجيل الدخول</div>
-
-      <div style="margin-top:14px;display:grid;gap:10px;">
-        <label>User
-          <input id="u" autocomplete="username" />
-        </label>
-
-        <label>Password
-          <input id="p" type="password" autocomplete="current-password" />
-        </label>
-
-        <button id="btn">Login</button>
-        <div id="msg" class="small" style="color:#c0392b;"></div>
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <img class="auth-logo" src="./assets/favicon.png" alt="Logo" />
+        <div class="auth-title">Payments Control</div>
+        <div class="auth-sub">Sign in to access the dashboards</div>
       </div>
+
+      <form id="loginForm" class="auth-form" autocomplete="on">
+        <label class="auth-field">
+          <span>Username</span>
+          <input id="username" name="username" type="text" placeholder="Enter username" required />
+        </label>
+
+        <label class="auth-field">
+          <span>Password</span>
+          <div class="auth-password">
+            <input id="password" name="password" type="password" placeholder="Enter password" required />
+            <button id="togglePw" class="auth-eye" type="button" aria-label="Show password" title="Show/Hide">
+              👁
+            </button>
+          </div>
+        </label>
+
+        <div id="loginError" class="auth-error" style="display:none;"></div>
+
+        <button class="auth-submit" type="submit">Login</button>
+
+        <div class="auth-footer">
+          <span>© <span id="year"></span> Payments Control Module</span>
+        </div>
+      </form>
     </div>
   </div>
 
   <script type="module">
+    // مهم: يفترض أن عندك functions في auth.js زي login() أو validateCredentials()
+    // لو أسماء الدوال عندك مختلفة قولّي وأنا أظبطها على كودك الحالي.
     import { login } from "./src/auth.js";
 
-    const u = document.getElementById("u");
-    const p = document.getElementById("p");
-    const msg = document.getElementById("msg");
+    const form = document.getElementById("loginForm");
+    const errBox = document.getElementById("loginError");
+    const togglePw = document.getElementById("togglePw");
+    const pw = document.getElementById("password");
+    document.getElementById("year").textContent = String(new Date().getFullYear());
 
-    function go(){
-      msg.textContent = "";
-      const ok = login(u.value, p.value);
-      if (!ok){
-        msg.textContent = "بيانات الدخول غير صحيحة";
-        return;
+    togglePw.addEventListener("click", () => {
+      pw.type = pw.type === "password" ? "text" : "password";
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errBox.style.display = "none";
+      errBox.textContent = "";
+
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+
+      try {
+        const ok = await login(username, password);
+
+        if (!ok) {
+          errBox.textContent = "Invalid username or password.";
+          errBox.style.display = "block";
+          return;
+        }
+
+        // بعد نجاح الدخول: لو فيه redirect مخزن يرجع له، وإلا يروح للـ dashboard
+        const next = sessionStorage.getItem("nextUrl") || "./index.html";
+        sessionStorage.removeItem("nextUrl");
+        window.location.href = next;
+
+      } catch (err) {
+        console.error(err);
+        errBox.textContent = "Something went wrong. Please try again.";
+        errBox.style.display = "block";
       }
-      // يرجع لآخر صفحة كان رايح لها أو يفتح الداشبورد
-      const next = sessionStorage.getItem("pc_next") || "./index.html";
-      sessionStorage.removeItem("pc_next");
-      window.location.href = next;
-    }
-
-    document.getElementById("btn").addEventListener("click", go);
-    p.addEventListener("keydown", (e)=>{ if(e.key==="Enter") go(); });
+    });
   </script>
 </body>
 </html>
