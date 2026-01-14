@@ -13,7 +13,7 @@ let projectsBySector = new Map();
 
 const WEEK_AR = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 
-// ===================== Helpers
+// ===== Helpers
 function normText(x) {
   return String(x ?? "")
     .replace(/[\u200E\u200F\u202A-\u202E]/g, "")
@@ -120,7 +120,7 @@ function inRangeUTC(d, from, to){
   return true;
 }
 
-// ===================== Status
+// ===== Status
 function statusFromRow({pay, appr, paid}){
   const hasPay = !!pay;
   const hasAppr = !!appr;
@@ -131,7 +131,7 @@ function statusFromRow({pay, appr, paid}){
   return "";
 }
 
-// ===================== CSV
+// ===== CSV
 function parseCSV(text){
   const res = Papa.parse(text, {
     header:true,
@@ -142,7 +142,7 @@ function parseCSV(text){
   return res.data || [];
 }
 
-// ===================== Normalize
+// ===== Normalize
 function normalizeRow(raw){
   const row = {};
   Object.entries(raw).forEach(([k,v])=>{
@@ -173,6 +173,7 @@ function normalizeRow(raw){
   const vendor = normText(row.vendor);
   const exactTime = normText(row.exact_time) || normText(row.Exacttime) || "";
 
+  // "تم عمل إيميل" = vendor + exactTime + payment_request_date
   const hasEmail = !!vendor && !!exactTime && hasValidDate(payDate);
 
   return {
@@ -206,7 +207,7 @@ function rebuildProjectDropdownForSector(){
   setSelectOptions("project", projects, true);
 }
 
-// ===================== Filters
+// ===== Filters
 function applyFilters(){
   const sectorKey = $("sector").value;
   const projectKey = normText($("project").value);
@@ -221,7 +222,6 @@ function applyFilters(){
     if (sectorKey && r.sectorKey !== sectorKey) return false;
     if (projectKey && r.projectKey !== projectKey) return false;
     if (status && r.status !== status) return false;
-
     if ((fromUTC || toUTC) && !inRangeUTC(r.payDate, fromUTC, toUTC)) return false;
     return true;
   });
@@ -238,16 +238,18 @@ function maxDateInView(){
   });
   return ms ? new Date(ms) : null;
 }
-
 function dayKey(d){
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth()+1).padStart(2,"0");
   const dd = String(d.getUTCDate()).padStart(2,"0");
   return `${y}-${m}-${dd}`;
 }
+function emailKey(project, day, time){
+  return `${project}|||${day}|||${time}`;
+}
 
-// ===================== Modal (generic)
-function openModal({ title, sub, tabs = null, columns = [], rows = [] }){
+// ===== Modal (with optional row click)
+function openModal({ title, sub, tabs = null, columns = [], rowsHtml = [], onRowClick = null }){
   const modal = $("insModal");
   const tabsEl = $("insTabs");
   const thead = $("insThead");
@@ -256,30 +258,38 @@ function openModal({ title, sub, tabs = null, columns = [], rows = [] }){
   $("insModalTitle").textContent = title || "—";
   $("insModalSub").textContent = sub || "";
 
-  if (tabs && tabs.length){
-    tabsEl.style.display = "flex";
-    tabsEl.innerHTML = tabs.map((t,i)=>`<button class="nav-btn" data-idx="${i}" style="opacity:.9;">${t.label}</button>`).join("");
-  }else{
-    tabsEl.style.display = "none";
-    tabsEl.innerHTML = "";
-  }
+  // cleanup old handler
+  tbody.onclick = null;
 
   const renderTable = (cols, rws)=>{
     thead.innerHTML = `<tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr>`;
     tbody.innerHTML = rws.length ? rws.join("") : `<tr><td colspan="${cols.length}">لا توجد بيانات</td></tr>`;
+    if (onRowClick){
+      tbody.onclick = (e)=>{
+        const tr = e.target.closest("tr[data-ekey]");
+        if (!tr) return;
+        onRowClick(tr.getAttribute("data-ekey"));
+      };
+    }
   };
 
   if (tabs && tabs.length){
-    renderTable(tabs[0].columns, tabs[0].rows);
+    tabsEl.style.display = "flex";
+    tabsEl.innerHTML = tabs.map((t,i)=>`<button class="nav-btn" data-idx="${i}" style="opacity:.9;">${t.label}</button>`).join("");
+    renderTable(tabs[0].columns, tabs[0].rowsHtml);
+
     tabsEl.querySelectorAll("button").forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const idx = +btn.getAttribute("data-idx");
         const t = tabs[idx];
-        renderTable(t.columns, t.rows);
+        onRowClick = t.onRowClick || null;
+        renderTable(t.columns, t.rowsHtml);
       });
     });
   }else{
-    renderTable(columns, rows);
+    tabsEl.style.display = "none";
+    tabsEl.innerHTML = "";
+    renderTable(columns, rowsHtml);
   }
 
   modal.classList.add("show");
@@ -291,6 +301,7 @@ function openModal({ title, sub, tabs = null, columns = [], rows = [] }){
     $("insModalClose").removeEventListener("click", close);
     modal.removeEventListener("click", onBackdrop);
     document.removeEventListener("keydown", onEsc);
+    tbody.onclick = null;
   };
   const onBackdrop = (e)=>{ if(e.target===modal) close(); };
   const onEsc = (e)=>{ if(e.key==="Escape") close(); };
@@ -300,44 +311,90 @@ function openModal({ title, sub, tabs = null, columns = [], rows = [] }){
   document.addEventListener("keydown", onEsc);
 }
 
-// ===================== Executive Summary
+// ===== Executive Summary + SLA (value-based + explanation)
 function renderExecutive(){
   const total = view.reduce((s,r)=>s+r.effective_total,0);
-  const paid = view.reduce((s,r)=>s+r.amount_paid,0);
+  const paidAll = view.reduce((s,r)=>s+r.amount_paid,0);
   const remain = view.reduce((s,r)=>s+r.remaining,0);
 
   $("k_total").textContent = fmtMoney(total);
-  $("k_paid").textContent = fmtMoney(paid);
+  $("k_paid").textContent = fmtMoney(paidAll);
   $("k_remain").textContent = fmtMoney(remain);
 
   const asof = maxDateInView();
   $("asof").textContent = asof ? `As of: ${dayKey(asof)}` : "As of: —";
 
-  // ✅ SLA بالقيم لكن يظهر 3 سطور: إجمالي / المنصرف / النسبة
+  // SLA base = only rows with payDate + paidDate + amount_paid>0
   const completed = view.filter(r=>hasValidDate(r.payDate) && hasValidDate(r.paidDate) && r.amount_paid > 0);
 
-  let sumAll = 0; // إجمالي المصروف للطلبات المكتملة (Base)
-  let sumOk = 0;  // المصروف اللي اتدفع خلال <= 5 أيام
+  let basePaid = 0;  // إجمالي (Base)
+  let okPaid = 0;    // المنصرف خلال <= 5 أيام
 
   completed.forEach(r=>{
     const d = daysBetween(r.payDate, r.paidDate);
-    sumAll += r.amount_paid;
-    if (d >= 0 && d <= 5) sumOk += r.amount_paid;
+    basePaid += r.amount_paid;
+    if (d >= 0 && d <= 5) okPaid += r.amount_paid;
   });
 
-  if (sumAll > 0){
-    const pct = Math.round((sumOk / sumAll) * 100);
-    $("sla_total").textContent = fmtMoney(sumAll);
-    $("sla_paid").textContent = fmtMoney(sumOk);
+  if (basePaid > 0){
+    const pct = Math.round((okPaid / basePaid) * 100);
+    $("sla_total").textContent = fmtMoney(basePaid);
+    $("sla_paid").textContent = fmtMoney(okPaid);
     $("sla_pct").textContent = `${pct}%`;
+
+    const missing = Math.max(0, paidAll - basePaid);
+    if (missing > 0){
+      $("sla_note").textContent =
+        `ملاحظة: إجمالي المصروف = ${fmtMoney(paidAll)} لكن SLA محسوب على ${fmtMoney(basePaid)} (فرق ${fmtMoney(missing)} بسبب صفوف مدفوعة بدون تواريخ مكتملة).`;
+    }else{
+      $("sla_note").textContent = `ملاحظة: SLA محسوب على المصروف للطلبات المكتملة فقط (Payment Request + Payment Date).`;
+    }
   }else{
     $("sla_total").textContent = "—";
     $("sla_paid").textContent = "—";
     $("sla_pct").textContent = "—";
+    $("sla_note").textContent = "ملاحظة: لا توجد مدفوعات مكتملة (Payment Request + Payment Date) داخل الفلاتر الحالية.";
   }
 }
 
-// ===================== Cash Exposure (كما هو في نسختك الحالية)
+// ===== Drill-down helpers
+function openEmailDetailsPopup({ title, sub, items }){
+  // items = array of raw rows belonging to ONE email group
+  const sorted = items.slice().sort((a,b)=>{
+    const va = a.vendor.localeCompare(b.vendor);
+    if (va !== 0) return va;
+    return (a.exactTime || "").localeCompare(b.exactTime || "");
+  });
+
+  const rowsHtml = sorted.map((r,i)=>{
+    const pay = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
+    const appr = hasValidDate(r.apprDate) ? dayKey(r.apprDate) : "—";
+    const paid = hasValidDate(r.paidDate) ? dayKey(r.paidDate) : "—";
+    const pct = r.effective_total > 0 ? clamp(Math.round((r.amount_paid/r.effective_total)*100),0,100) : 0;
+    return `
+      <tr>
+        <td>${i+1}</td>
+        <td>${escHtml(r.vendor || "—")}</td>
+        <td>${fmtMoney(r.effective_total)}</td>
+        <td>${fmtMoney(r.amount_paid)}</td>
+        <td>${fmtMoney(r.remaining)}</td>
+        <td>${pct}%</td>
+        <td>${pay}</td>
+        <td>${appr}</td>
+        <td>${paid}</td>
+      </tr>
+    `;
+  });
+
+  openModal({
+    title,
+    sub,
+    columns: ["م","المورد","صافي القيمة","المنصرف","المتبقي","%","طلب الصرف","الاعتماد","الدفع"],
+    rowsHtml
+  });
+}
+
+// ===== Cash Exposure (counts + popup summary + drilldown)
 function renderExposure(){
   const expRemain = { "1":0, "2":0, "3":0 };
   const expEmailCount = { "1":0, "2":0, "3":0 };
@@ -361,54 +418,65 @@ function renderExposure(){
   $("exp_all").textContent = fmtMoney(claimsTotal);
   $("exp_all_count").textContent = `عدد الصفوف: ${view.length}`;
 
+  const statusLabel =
+    (s)=> s==="1" ? "بدون اعتماد ولم يحول" :
+          s==="2" ? "معتمد ولم يحول" :
+          "معتمد وتم تحويله (متبقي جزئي)";
+
   const openStatusEmails = (status)=>{
     const list = view.filter(r=>r.status===status && r.remaining>0 && r.hasEmail);
 
-    const m = new Map();
+    // Group by (project + day + time)
+    const groups = new Map(); // ekey -> {project,day,time,total,paid,remain,items[]}
     list.forEach(r=>{
-      const dk = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
-      const key = `${r.project}|||${dk}|||${r.exactTime}`;
-      if (!m.has(key)){
-        m.set(key, { project:r.project, day:dk, time:r.exactTime, total:0, paid:0, remain:0, rows:0 });
+      const day = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
+      const key = emailKey(r.project, day, r.exactTime);
+      if (!groups.has(key)){
+        groups.set(key, { project:r.project, day, time:r.exactTime, total:0, paid:0, remain:0, items:[] });
       }
-      const a = m.get(key);
-      a.total += r.effective_total;
-      a.paid += r.amount_paid;
-      a.remain += r.remaining;
-      a.rows += 1;
+      const g = groups.get(key);
+      g.total += r.effective_total;
+      g.paid += r.amount_paid;
+      g.remain += r.remaining;
+      g.items.push(r);
     });
 
-    const arr = Array.from(m.values())
+    const arr = Array.from(groups.entries())
+      .map(([ekey,g])=>({ ekey, ...g }))
       .sort((a,b)=> (b.day.localeCompare(a.day)) || (a.time.localeCompare(b.time)));
 
-    const rowsHtml = arr.map(x=>{
-      const pct = x.total>0 ? clamp(Math.round((x.paid/x.total)*100),0,100) : 0;
+    const sumRemain = list.reduce((s,r)=>s+r.remaining,0);
+
+    const rowsHtml = arr.map(g=>{
+      const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
       return `
-        <tr>
-          <td>${escHtml(x.project)}</td>
-          <td>${x.day}</td>
-          <td>${escHtml(x.time)}</td>
-          <td>${x.rows}</td>
-          <td>${fmtMoney(x.total)}</td>
-          <td>${fmtMoney(x.paid)}</td>
-          <td>${fmtMoney(x.remain)}</td>
+        <tr data-ekey="${escHtml(g.ekey)}" style="cursor:pointer;">
+          <td>${escHtml(g.project)}</td>
+          <td>${g.day}</td>
+          <td>${escHtml(g.time)}</td>
+          <td>${fmtMoney(g.total)}</td>
+          <td>${fmtMoney(g.paid)}</td>
+          <td>${fmtMoney(g.remain)}</td>
           <td>${pct}%</td>
         </tr>
       `;
     });
 
-    const statusLabel =
-      status==="1" ? "بدون اعتماد ولم يحول" :
-      status==="2" ? "معتمد ولم يحول" :
-      "معتمد وتم تحويله (متبقي جزئي)";
-
-    const sumRemain = list.reduce((s,r)=>s+r.remaining,0);
-
     openModal({
-      title: `إيميلات الحالة: ${statusLabel}`,
-      sub: `عدد الإيميلات: ${arr.length} | إجمالي المتبقي: ${fmtMoney(sumRemain)}`,
-      columns: ["المشروع","اليوم","الوقت","عدد الصفوف","صافي القيمة","المصروف","المتبقي","%"],
-      rows: rowsHtml
+      title: `إيميلات الحالة: ${statusLabel(status)}`,
+      sub: `اضغط على أي سطر لعرض تفاصيل الإيميل | عدد الإيميلات: ${arr.length} | إجمالي المتبقي: ${fmtMoney(sumRemain)}`,
+      columns: ["المشروع","اليوم","الوقت","صافي القيمة","المنصرف","المتبقي","%"],
+      rowsHtml,
+      onRowClick: (ekey)=>{
+        const g = groups.get(ekey);
+        if (!g) return;
+        const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
+        openEmailDetailsPopup({
+          title: `تفاصيل الإيميل — ${g.project}`,
+          sub: `اليوم: ${g.day} | الوقت: ${g.time} | إجمالي: ${fmtMoney(g.total)} | المنصرف: ${fmtMoney(g.paid)} | المتبقي: ${fmtMoney(g.remain)} | ${pct}%`,
+          items: g.items
+        });
+      }
     });
   };
 
@@ -416,38 +484,39 @@ function renderExposure(){
   $("exp_2_count").onclick = ()=> openStatusEmails("2");
   $("exp_3_count").onclick = ()=> openStatusEmails("3");
 
+  // Last card: Tabs (with email drilldown on Tab 1)
   $("exp_all_count").onclick = ()=>{
     const withEmail = view.filter(r=>r.hasEmail);
     const withoutEmail = view.filter(r=>!r.hasEmail);
 
-    const m1 = new Map();
+    const groups = new Map();
     withEmail.forEach(r=>{
-      const dk = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
-      const key = `${r.project}|||${dk}|||${r.exactTime}`;
-      if (!m1.has(key)){
-        m1.set(key, { project:r.project, day:dk, time:r.exactTime, total:0, paid:0, remain:0, rows:0 });
+      const day = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
+      const key = emailKey(r.project, day, r.exactTime);
+      if (!groups.has(key)){
+        groups.set(key, { project:r.project, day, time:r.exactTime, total:0, paid:0, remain:0, items:[] });
       }
-      const a = m1.get(key);
-      a.total += r.effective_total;
-      a.paid += r.amount_paid;
-      a.remain += r.remaining;
-      a.rows += 1;
+      const g = groups.get(key);
+      g.total += r.effective_total;
+      g.paid += r.amount_paid;
+      g.remain += r.remaining;
+      g.items.push(r);
     });
 
-    const tab1Arr = Array.from(m1.values())
+    const tab1Arr = Array.from(groups.entries())
+      .map(([ekey,g])=>({ ekey, ...g }))
       .sort((a,b)=> (b.day.localeCompare(a.day)) || (a.time.localeCompare(b.time)));
 
-    const tab1Rows = tab1Arr.map(x=>{
-      const pct = x.total>0 ? clamp(Math.round((x.paid/x.total)*100),0,100) : 0;
+    const tab1RowsHtml = tab1Arr.map(g=>{
+      const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
       return `
-        <tr>
-          <td>${escHtml(x.project)}</td>
-          <td>${x.day}</td>
-          <td>${escHtml(x.time)}</td>
-          <td>${x.rows}</td>
-          <td>${fmtMoney(x.total)}</td>
-          <td>${fmtMoney(x.paid)}</td>
-          <td>${fmtMoney(x.remain)}</td>
+        <tr data-ekey="${escHtml(g.ekey)}" style="cursor:pointer;">
+          <td>${escHtml(g.project)}</td>
+          <td>${g.day}</td>
+          <td>${escHtml(g.time)}</td>
+          <td>${fmtMoney(g.total)}</td>
+          <td>${fmtMoney(g.paid)}</td>
+          <td>${fmtMoney(g.remain)}</td>
           <td>${pct}%</td>
         </tr>
       `;
@@ -463,7 +532,7 @@ function renderExposure(){
     });
 
     const tab2Arr = Array.from(m2.values()).sort((a,b)=> b.total - a.total);
-    const tab2Rows = tab2Arr.map(x=>`
+    const tab2RowsHtml = tab2Arr.map(x=>`
       <tr>
         <td>${escHtml(x.project)}</td>
         <td>${x.rows}</td>
@@ -471,28 +540,38 @@ function renderExposure(){
       </tr>
     `);
 
-    const claimsTotal = view.reduce((s,r)=>s+r.effective_total,0);
+    const claimsTotal2 = view.reduce((s,r)=>s+r.effective_total,0);
 
     openModal({
       title: "إجمالي المطالبات — تفاصيل",
-      sub: `إجمالي القيمة (بعد الملغي): ${fmtMoney(claimsTotal)} | عدد الصفوف: ${view.length}`,
+      sub: `اضغط على أي سطر في تبويب (تم عمل إيميل) لعرض تفاصيل الإيميل | إجمالي (بعد الملغي): ${fmtMoney(claimsTotal2)} | عدد الصفوف: ${view.length}`,
       tabs: [
         {
           label: `تم عمل إيميل (${tab1Arr.length})`,
-          columns: ["المشروع","اليوم","الوقت","عدد الصفوف","صافي القيمة","المصروف","المتبقي","%"],
-          rows: tab1Rows
+          columns: ["المشروع","اليوم","الوقت","صافي القيمة","المنصرف","المتبقي","%"],
+          rowsHtml: tab1RowsHtml,
+          onRowClick: (ekey)=>{
+            const g = groups.get(ekey);
+            if (!g) return;
+            const pct = g.total>0 ? clamp(Math.round((g.paid/g.total)*100),0,100) : 0;
+            openEmailDetailsPopup({
+              title: `تفاصيل الإيميل — ${g.project}`,
+              sub: `اليوم: ${g.day} | الوقت: ${g.time} | إجمالي: ${fmtMoney(g.total)} | المنصرف: ${fmtMoney(g.paid)} | المتبقي: ${fmtMoney(g.remain)} | ${pct}%`,
+              items: g.items
+            });
+          }
         },
         {
           label: `لم يتم عمل إيميل (${withoutEmail.length})`,
           columns: ["المشروع","عدد الصفوف","إجمالي المطالبات"],
-          rows: tab2Rows
+          rowsHtml: tab2RowsHtml
         }
       ]
     });
   };
 }
 
-// ===================== باقي الأقسام
+// ===== Remaining sections unchanged
 function renderAging(){
   const asof = maxDateInView();
   const agingBase = asof || new Date();
@@ -572,8 +651,8 @@ function renderBottlenecks(){
 
 function renderWeekPatternAndForecast(){
   const paid = view.filter(r=>hasValidDate(r.paidDate) && r.amount_paid > 0);
-
   const lastPaidMs = paid.reduce((m,r)=>Math.max(m,r.paidDate.getTime()), 0);
+
   if (!lastPaidMs){
     $("weekTable").innerHTML = `<tr><td colspan="3">لا توجد عمليات دفع في الفلاتر الحالية</td></tr>`;
     $("fc_avg").textContent = "—";
@@ -584,7 +663,6 @@ function renderWeekPatternAndForecast(){
 
   const end = new Date(lastPaidMs);
   const start = new Date(end.getTime() - 29*24*60*60*1000);
-
   const paid30 = paid.filter(r=> r.paidDate.getTime() >= start.getTime() && r.paidDate.getTime() <= end.getTime());
 
   const wk = Array.from({length:7}, (_,i)=>({ i, sum:0, count:0 }));
@@ -635,7 +713,7 @@ function renderDataQuality(){
   `).join("");
 }
 
-// ===================== Render
+// ===== Render
 function renderAll(){
   applyFilters();
   renderExecutive();
@@ -646,7 +724,7 @@ function renderAll(){
   renderDataQuality();
 }
 
-// ===================== Init
+// ===== Init
 async function init(){
   if (typeof Papa === "undefined"){
     $("meta").textContent = "⚠️ Papaparse غير محمّل. تأكد من ./assets/vendor/papaparse.min.js";
