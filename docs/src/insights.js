@@ -4,8 +4,8 @@ import { DATA_SOURCE } from "./config.js";
 const $ = (id) => document.getElementById(id);
 
 let rawRows = [];
-let rows = [];      // normalized
-let view = [];      // filtered
+let rows = [];   // normalized
+let view = [];   // filtered
 
 let sectorLabelByKey = new Map();
 let projectLabelByKey = new Map();
@@ -13,6 +13,7 @@ let projectsBySector = new Map();
 
 const WEEK_AR = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 
+// ===================== Helpers
 function normText(x) {
   return String(x ?? "")
     .replace(/[\u200E\u200F\u202A-\u202E]/g, "")
@@ -44,6 +45,17 @@ function escHtml(s){
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[ch]));
 }
+function uniqSorted(arr) {
+  return Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+}
+function setSelectOptions(id, values, keepValue = false) {
+  const sel = $(id);
+  const current = sel.value;
+  const opts = uniqSorted(values);
+  sel.innerHTML = `<option value="">الكل</option>` + opts.map(v => `<option value="${v}">${v}</option>`).join("");
+  if (keepValue && current && opts.includes(current)) sel.value = current;
+  else sel.value = "";
+}
 
 function parseDateSmart(s) {
   let t = normText(s);
@@ -64,6 +76,11 @@ function parseDateSmart(s) {
 
   return null;
 }
+function hasValidDate(d){ return d instanceof Date && !isNaN(d.getTime()); }
+function daysBetween(a,b){
+  const ms = b.getTime() - a.getTime();
+  return Math.floor(ms / (24*60*60*1000));
+}
 
 function parseUserDateInput(txt){
   const t = normText(txt);
@@ -73,8 +90,7 @@ function parseUserDateInput(txt){
   if (m1){
     const dd = +m1[1], mm = +m1[2], yy = +m1[3];
     const d = new Date(Date.UTC(yy, mm-1, dd));
-    if (isNaN(d.getTime())) return null;
-    return d;
+    return isNaN(d.getTime()) ? null : d;
   }
 
   const digits = t.replace(/\D/g, "");
@@ -83,13 +99,10 @@ function parseUserDateInput(txt){
     const mm = +digits.slice(2,4);
     const yy = +digits.slice(4,8);
     const d = new Date(Date.UTC(yy, mm-1, dd));
-    if (isNaN(d.getTime())) return null;
-    return d;
+    return isNaN(d.getTime()) ? null : d;
   }
-
   return null;
 }
-
 function autoSlashDateInput(el){
   const raw = el.value;
   const digits = raw.replace(/\D/g, "").slice(0,8);
@@ -99,23 +112,15 @@ function autoSlashDateInput(el){
   else out = digits.slice(0,2)+"/"+digits.slice(2,4)+"/"+digits.slice(4);
   el.value = out;
 }
-
-function uniqSorted(arr) {
-  return Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+function inRangeUTC(d, from, to){
+  if (!hasValidDate(d)) return false;
+  const x = d.getTime();
+  if (from && x < from.getTime()) return false;
+  if (to && x > to.getTime()) return false;
+  return true;
 }
 
-function setSelectOptions(id, values, keepValue = false) {
-  const sel = $(id);
-  const current = sel.value;
-  const opts = uniqSorted(values);
-
-  sel.innerHTML = `<option value="">الكل</option>` + opts.map(v => `<option value="${v}">${v}</option>`).join("");
-  if (keepValue && current && opts.includes(current)) sel.value = current;
-  else sel.value = "";
-}
-
-function hasValidDate(d){ return d instanceof Date && !isNaN(d.getTime()); }
-
+// ===================== Status
 function statusFromRow({pay, appr, paid}){
   const hasPay = !!pay;
   const hasAppr = !!appr;
@@ -126,6 +131,7 @@ function statusFromRow({pay, appr, paid}){
   return "";
 }
 
+// ===================== CSV
 function parseCSV(text){
   const res = Papa.parse(text, {
     header:true,
@@ -136,6 +142,7 @@ function parseCSV(text){
   return res.data || [];
 }
 
+// ===================== Normalize
 function normalizeRow(raw){
   const row = {};
   Object.entries(raw).forEach(([k,v])=>{
@@ -163,12 +170,18 @@ function normalizeRow(raw){
   const effective_total = Math.max(0, amount_total - amount_canceled);
   const remaining = Math.max(0, effective_total - amount_paid);
 
+  const vendor = normText(row.vendor);
+  const exactTime = normText(row.exact_time) || normText(row.Exacttime) || "";
+
+  // تعريف "تم عمل إيميل"
+  const hasEmail = !!vendor && !!exactTime && hasValidDate(payDate);
+
   return {
     sectorKey, projectKey,
     sector, project,
 
-    vendor: normText(row.vendor),
-    exact_time: normText(row.exact_time),
+    vendor,
+    exactTime,
 
     payDate, apprDate, paidDate,
     status: statusFromRow({pay:payDate, appr:apprDate, paid:paidDate}),
@@ -178,6 +191,8 @@ function normalizeRow(raw){
     amount_canceled,
     effective_total,
     remaining,
+
+    hasEmail,
   };
 }
 
@@ -192,14 +207,7 @@ function rebuildProjectDropdownForSector(){
   setSelectOptions("project", projects, true);
 }
 
-function inRangeUTC(d, from, to){
-  if (!hasValidDate(d)) return false;
-  const x = d.getTime();
-  if (from && x < from.getTime()) return false;
-  if (to && x > to.getTime()) return false;
-  return true;
-}
-
+// ===================== Filters
 function applyFilters(){
   const sectorKey = $("sector").value;
   const projectKey = normText($("project").value);
@@ -215,9 +223,8 @@ function applyFilters(){
     if (projectKey && r.projectKey !== projectKey) return false;
     if (status && r.status !== status) return false;
 
-    // فلترة بالتاريخ بناء على تاريخ طلب الصرف
+    // فلترة بالتاريخ على أساس تاريخ طلب الصرف
     if ((fromUTC || toUTC) && !inRangeUTC(r.payDate, fromUTC, toUTC)) return false;
-
     return true;
   });
 
@@ -226,7 +233,6 @@ function applyFilters(){
 }
 
 function maxDateInView(){
-  // “As of” = أحدث تاريخ متاح بالداتا (payment_date لو موجود، وإلا payment_request_date)
   let ms = 0;
   view.forEach(r=>{
     if (hasValidDate(r.paidDate)) ms = Math.max(ms, r.paidDate.getTime());
@@ -235,12 +241,71 @@ function maxDateInView(){
   return ms ? new Date(ms) : null;
 }
 
-function daysBetween(a,b){
-  // b - a in days (UTC-ish)
-  const ms = b.getTime() - a.getTime();
-  return Math.floor(ms / (24*60*60*1000));
+function dayKey(d){
+  // YYYY-MM-DD
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth()+1).padStart(2,"0");
+  const dd = String(d.getUTCDate()).padStart(2,"0");
+  return `${y}-${m}-${dd}`;
 }
 
+// ===================== Modal (generic)
+function openModal({ title, sub, tabs = null, columns = [], rows = [] }){
+  const modal = $("insModal");
+  const tabsEl = $("insTabs");
+  const thead = $("insThead");
+  const tbody = $("insTbody");
+
+  $("insModalTitle").textContent = title || "—";
+  $("insModalSub").textContent = sub || "";
+
+  // tabs
+  if (tabs && tabs.length){
+    tabsEl.style.display = "flex";
+    tabsEl.innerHTML = tabs.map((t,i)=>`<button class="nav-btn" data-idx="${i}" style="opacity:.9;">${t.label}</button>`).join("");
+  }else{
+    tabsEl.style.display = "none";
+    tabsEl.innerHTML = "";
+  }
+
+  const renderTable = (cols, rws)=>{
+    thead.innerHTML = `<tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr>`;
+    tbody.innerHTML = rws.length ? rws.join("") : `<tr><td colspan="${cols.length}">لا توجد بيانات</td></tr>`;
+  };
+
+  if (tabs && tabs.length){
+    renderTable(tabs[0].columns, tabs[0].rows);
+
+    tabsEl.querySelectorAll("button").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const idx = +btn.getAttribute("data-idx");
+        const t = tabs[idx];
+        renderTable(t.columns, t.rows);
+      });
+    });
+  }else{
+    renderTable(columns, rows);
+  }
+
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden","false");
+
+  const close = ()=>{
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden","true");
+    $("insModalClose").removeEventListener("click", close);
+    modal.removeEventListener("click", onBackdrop);
+    document.removeEventListener("keydown", onEsc);
+  };
+  const onBackdrop = (e)=>{ if(e.target===modal) close(); };
+  const onEsc = (e)=>{ if(e.key==="Escape") close(); };
+
+  $("insModalClose").addEventListener("click", close);
+  modal.addEventListener("click", onBackdrop);
+  document.addEventListener("keydown", onEsc);
+}
+
+// ===================== Executive Summary
 function renderExecutive(){
   const total = view.reduce((s,r)=>s+r.effective_total,0);
   const paid = view.reduce((s,r)=>s+r.amount_paid,0);
@@ -251,35 +316,191 @@ function renderExecutive(){
   $("k_remain").textContent = fmtMoney(remain);
 
   const asof = maxDateInView();
-  $("asof").textContent = asof ? `As of: ${asof.toISOString().slice(0,10)}` : "As of: —";
+  $("asof").textContent = asof ? `As of: ${dayKey(asof)}` : "As of: —";
 
-  // SLA: paid within 5 days (only for completed payments)
-  const paidRows = view.filter(r=>hasValidDate(r.payDate) && hasValidDate(r.paidDate));
-  let slaOk = 0;
-  paidRows.forEach(r=>{
+  // ✅ SLA بالقيم: amount_paid خلال ≤ 5 أيام / إجمالي amount_paid للمدفوعات المكتملة
+  const completed = view.filter(r=>hasValidDate(r.payDate) && hasValidDate(r.paidDate) && r.amount_paid > 0);
+
+  let sumAll = 0;
+  let sumOk = 0;
+
+  completed.forEach(r=>{
     const d = daysBetween(r.payDate, r.paidDate);
-    if (d <= 5 && d >= 0) slaOk++;
+    sumAll += r.amount_paid;
+    if (d >= 0 && d <= 5) sumOk += r.amount_paid;
   });
-  const slaPct = paidRows.length ? Math.round((slaOk/paidRows.length)*100) : 0;
-  $("k_sla").textContent = paidRows.length ? `${slaPct}% (${slaOk}/${paidRows.length})` : "—";
+
+  if (sumAll > 0){
+    const pct = Math.round((sumOk / sumAll) * 100);
+    $("k_sla").textContent = `${pct}% (${fmtMoney(sumOk)} / ${fmtMoney(sumAll)})`;
+  }else{
+    $("k_sla").textContent = "—";
+  }
 }
 
+// ===================== Cash Exposure
 function renderExposure(){
-  const exp = { "1":0, "2":0, "3":0, "all":0 };
+  // أول 3: متبقي حسب الحالة + عدد الإيميلات (hasEmail)
+  const expRemain = { "1":0, "2":0, "3":0 };
+  const expEmailCount = { "1":0, "2":0, "3":0 };
+
   view.forEach(r=>{
-    if (r.remaining <= 0) return;
-    if (r.status === "1") exp["1"] += r.remaining;
-    else if (r.status === "2") exp["2"] += r.remaining;
-    else if (r.status === "3") exp["3"] += r.remaining;
-    exp.all += r.remaining;
+    if (r.remaining > 0 && (r.status==="1"||r.status==="2"||r.status==="3")){
+      expRemain[r.status] += r.remaining;
+      if (r.hasEmail) expEmailCount[r.status] += 1;
+    }
   });
 
-  $("exp_1").textContent = fmtMoney(exp["1"]);
-  $("exp_2").textContent = fmtMoney(exp["2"]);
-  $("exp_3").textContent = fmtMoney(exp["3"]);
-  $("exp_all").textContent = fmtMoney(exp.all);
+  $("exp_1").textContent = fmtMoney(expRemain["1"]);
+  $("exp_2").textContent = fmtMoney(expRemain["2"]);
+  $("exp_3").textContent = fmtMoney(expRemain["3"]);
+
+  $("exp_1_count").textContent = `عدد الإيميلات: ${expEmailCount["1"]}`;
+  $("exp_2_count").textContent = `عدد الإيميلات: ${expEmailCount["2"]}`;
+  $("exp_3_count").textContent = `عدد الإيميلات: ${expEmailCount["3"]}`;
+
+  // الكارت الأخير: إجمالي المطالبات (بعد الملغي) بغض النظر عن الدفع/الإيميل
+  const claimsTotal = view.reduce((s,r)=>s+r.effective_total,0);
+  $("exp_all").textContent = fmtMoney(claimsTotal);
+  $("exp_all_count").textContent = `عدد الصفوف: ${view.length}`;
+
+  // أحداث الضغط على العداد (أول 3): Popup للإيميلات غير المحولة/حسب الحالة
+  const openStatusEmails = (status)=>{
+    const list = view.filter(r=>r.status===status && r.remaining>0 && r.hasEmail);
+
+    // ملخص لكل "إيميل": project + day + time
+    const m = new Map();
+    list.forEach(r=>{
+      const dk = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
+      const key = `${r.project}|||${dk}|||${r.exactTime}`;
+      if (!m.has(key)){
+        m.set(key, { project:r.project, day:dk, time:r.exactTime, total:0, paid:0, remain:0, rows:0 });
+      }
+      const a = m.get(key);
+      a.total += r.effective_total;
+      a.paid += r.amount_paid;
+      a.remain += r.remaining;
+      a.rows += 1;
+    });
+
+    const arr = Array.from(m.values())
+      .sort((a,b)=> (b.day.localeCompare(a.day)) || (a.time.localeCompare(b.time)));
+
+    const rowsHtml = arr.map(x=>{
+      const pct = x.total>0 ? clamp(Math.round((x.paid/x.total)*100),0,100) : 0;
+      return `
+        <tr>
+          <td>${escHtml(x.project)}</td>
+          <td>${x.day}</td>
+          <td>${escHtml(x.time)}</td>
+          <td>${x.rows}</td>
+          <td>${fmtMoney(x.total)}</td>
+          <td>${fmtMoney(x.paid)}</td>
+          <td>${fmtMoney(x.remain)}</td>
+          <td>${pct}%</td>
+        </tr>
+      `;
+    });
+
+    const statusLabel =
+      status==="1" ? "بدون اعتماد ولم يحول" :
+      status==="2" ? "معتمد ولم يحول" :
+      "معتمد وتم تحويله (متبقي جزئي)";
+
+    const sumRemain = list.reduce((s,r)=>s+r.remaining,0);
+
+    openModal({
+      title: `إيميلات الحالة: ${statusLabel}`,
+      sub: `عدد الإيميلات: ${arr.length} | إجمالي المتبقي: ${fmtMoney(sumRemain)}`,
+      columns: ["المشروع","اليوم","الوقت","عدد الصفوف","صافي القيمة","المصروف","المتبقي","%"],
+      rows: rowsHtml
+    });
+  };
+
+  $("exp_1_count").onclick = ()=> openStatusEmails("1");
+  $("exp_2_count").onclick = ()=> openStatusEmails("2");
+  $("exp_3_count").onclick = ()=> openStatusEmails("3");
+
+  // الكارت الأخير: Popup بتابين (تم عمل إيميل / لم يتم عمل إيميل)
+  $("exp_all_count").onclick = ()=>{
+    const withEmail = view.filter(r=>r.hasEmail);
+    const withoutEmail = view.filter(r=>!r.hasEmail);
+
+    // Tab 1: تجميع حسب كل إيميل
+    const m1 = new Map();
+    withEmail.forEach(r=>{
+      const dk = hasValidDate(r.payDate) ? dayKey(r.payDate) : "—";
+      const key = `${r.project}|||${dk}|||${r.exactTime}`;
+      if (!m1.has(key)){
+        m1.set(key, { project:r.project, day:dk, time:r.exactTime, total:0, paid:0, remain:0, rows:0 });
+      }
+      const a = m1.get(key);
+      a.total += r.effective_total;
+      a.paid += r.amount_paid;
+      a.remain += r.remaining;
+      a.rows += 1;
+    });
+
+    const tab1Arr = Array.from(m1.values())
+      .sort((a,b)=> (b.day.localeCompare(a.day)) || (a.time.localeCompare(b.time)));
+
+    const tab1Rows = tab1Arr.map(x=>{
+      const pct = x.total>0 ? clamp(Math.round((x.paid/x.total)*100),0,100) : 0;
+      return `
+        <tr>
+          <td>${escHtml(x.project)}</td>
+          <td>${x.day}</td>
+          <td>${escHtml(x.time)}</td>
+          <td>${x.rows}</td>
+          <td>${fmtMoney(x.total)}</td>
+          <td>${fmtMoney(x.paid)}</td>
+          <td>${fmtMoney(x.remain)}</td>
+          <td>${pct}%</td>
+        </tr>
+      `;
+    });
+
+    // Tab 2: تجميع حسب المشروع (بدون إيميل)
+    const m2 = new Map();
+    withoutEmail.forEach(r=>{
+      const p = r.project || "(بدون مشروع)";
+      if (!m2.has(p)) m2.set(p, { project:p, rows:0, total:0 });
+      const a = m2.get(p);
+      a.rows += 1;
+      a.total += r.effective_total;
+    });
+
+    const tab2Arr = Array.from(m2.values()).sort((a,b)=> b.total - a.total);
+    const tab2Rows = tab2Arr.map(x=>`
+      <tr>
+        <td>${escHtml(x.project)}</td>
+        <td>${x.rows}</td>
+        <td>${fmtMoney(x.total)}</td>
+      </tr>
+    `);
+
+    const claimsTotal = view.reduce((s,r)=>s+r.effective_total,0);
+
+    openModal({
+      title: "إجمالي المطالبات — تفاصيل",
+      sub: `إجمالي القيمة (بعد الملغي): ${fmtMoney(claimsTotal)} | عدد الصفوف: ${view.length}`,
+      tabs: [
+        {
+          label: `تم عمل إيميل (${tab1Arr.length})`,
+          columns: ["المشروع","اليوم","الوقت","عدد الصفوف","صافي القيمة","المصروف","المتبقي","%"],
+          rows: tab1Rows
+        },
+        {
+          label: `لم يتم عمل إيميل (${withoutEmail.length})`,
+          columns: ["المشروع","عدد الصفوف","إجمالي المطالبات"],
+          rows: tab2Rows
+        }
+      ]
+    });
+  };
 }
 
+// ===================== باقي الأقسام (كما هي)
 function renderAging(){
   const asof = maxDateInView();
   const agingBase = asof || new Date();
@@ -329,7 +550,7 @@ function renderAging(){
 function renderBottlenecks(){
   const asof = maxDateInView() || new Date();
 
-  const map = new Map(); // project -> {count,sumRemain,sumAge}
+  const map = new Map();
   view.forEach(r=>{
     if (!hasValidDate(r.payDate)) return;
     if (r.remaining <= 0) return;
@@ -358,7 +579,6 @@ function renderBottlenecks(){
 }
 
 function renderWeekPatternAndForecast(){
-  // نعتمد على payment_date فقط (عمليات دفع حقيقية)
   const paid = view.filter(r=>hasValidDate(r.paidDate) && r.amount_paid > 0);
 
   const lastPaidMs = paid.reduce((m,r)=>Math.max(m,r.paidDate.getTime()), 0);
@@ -375,10 +595,9 @@ function renderWeekPatternAndForecast(){
 
   const paid30 = paid.filter(r=> r.paidDate.getTime() >= start.getTime() && r.paidDate.getTime() <= end.getTime());
 
-  // Week pattern
   const wk = Array.from({length:7}, (_,i)=>({ i, sum:0, count:0 }));
   paid30.forEach(r=>{
-    const day = r.paidDate.getUTCDay(); // 0=Sun
+    const day = r.paidDate.getUTCDay();
     wk[day].sum += r.amount_paid;
     wk[day].count += 1;
   });
@@ -391,7 +610,6 @@ function renderWeekPatternAndForecast(){
     </tr>
   `).join("");
 
-  // Forecast
   const totalPaid30 = paid30.reduce((s,r)=>s+r.amount_paid,0);
   const avg = totalPaid30 / 30;
 
@@ -404,10 +622,10 @@ function renderDataQuality(){
   const total = view.length || 1;
 
   const metrics = [
-    { key:"missing_payDate", label:"طلبات بدون تاريخ طلب صرف", test:(r)=>!hasValidDate(r.payDate) },
-    { key:"missing_vendor", label:"صفوف بدون مورد", test:(r)=>!normText(r.vendor) },
-    { key:"missing_status", label:"صفوف حالة غير محددة (تواريخ ناقصة)", test:(r)=>!r.status },
-    { key:"missing_project", label:"صفوف بدون مشروع", test:(r)=>!normText(r.project) || r.project==="(بدون مشروع)" },
+    { label:"طلبات بدون تاريخ طلب صرف", test:(r)=>!hasValidDate(r.payDate) },
+    { label:"صفوف بدون مورد", test:(r)=>!normText(r.vendor) },
+    { label:"صفوف حالة غير محددة (تواريخ ناقصة)", test:(r)=>!r.status },
+    { label:"صفوف بدون مشروع", test:(r)=>!normText(r.project) || r.project==="(بدون مشروع)" },
   ];
 
   const rowsOut = metrics.map(m=>{
@@ -425,6 +643,7 @@ function renderDataQuality(){
   `).join("");
 }
 
+// ===================== Render
 function renderAll(){
   applyFilters();
   renderExecutive();
@@ -435,6 +654,7 @@ function renderAll(){
   renderDataQuality();
 }
 
+// ===================== Init
 async function init(){
   if (typeof Papa === "undefined"){
     $("meta").textContent = "⚠️ Papaparse غير محمّل. تأكد من ./assets/vendor/papaparse.min.js";
@@ -451,25 +671,24 @@ async function init(){
   rawRows = parseCSV(text);
   rows = rawRows.map(normalizeRow);
 
-  // build maps
   projectsBySector = new Map();
   rows.forEach(r=>{
     if (!projectsBySector.has(r.sectorKey)) projectsBySector.set(r.sectorKey, new Set());
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   });
 
-  // build dropdowns
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
-  $("sector").innerHTML = `<option value="">الكل</option>` +
+  $("sector").innerHTML =
+    `<option value="">الكل</option>` +
     sectorKeys.map(sk=>`<option value="${sk}">${sectorLabelByKey.get(sk) || sk}</option>`).join("");
 
   setSelectOptions("project", Array.from(projectLabelByKey.values()));
 
-  // listeners
   $("sector").addEventListener("change", ()=>{
     rebuildProjectDropdownForSector();
     renderAll();
   });
+
   ["project","status"].forEach(id=>{
     $(id).addEventListener("change", renderAll);
     $(id).addEventListener("input", renderAll);
@@ -496,4 +715,3 @@ async function init(){
 }
 
 init();
-
