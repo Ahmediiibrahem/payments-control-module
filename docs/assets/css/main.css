@@ -447,3 +447,27 @@ tbody tr:hover{background:rgba(255,255,255,.06)}
   border-color: rgba(255,255,255,.22);
   opacity: 1;
 }
+/* (نفس ملفك الأصلي بالكامل…) */
+
+/* ✅ Responsive: allow wrapping on small screens (3 tabs) */
+@media(max-width:720px){
+  .nav-top.nav-fixed{
+    flex-wrap:wrap;
+    white-space:normal;
+  }
+  .nav-top.nav-fixed .nav-btn{
+    width:min(230px, 92vw);
+  }
+}
+
+/* =========================
+   Email Analysis: modal fixed height + scroll (max ~15 rows visible)
+========================= */
+#emailModal .modal{
+  width: min(900px, 96vw);
+  max-height: 78vh;
+}
+#emailModal .modal-body{
+  overflow: auto;
+  max-height: 62vh;
+}
