@@ -30,7 +30,7 @@
 
   <div class="container">
 
-    <!-- ✅ Unified Topbar -->
+    <!-- ✅ Topbar: 3 tabs -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
@@ -41,7 +41,7 @@
       <h1 class="page-title">E-Mails Analysis</h1>
     </div>
 
-    <!-- KPIs -->
+    <!-- ✅ KPIs: 4 Cards فقط -->
     <div class="grid kpi">
       <div class="card kpi-card">
         <div class="kpi-label">عدد الإيميلات</div>
@@ -61,15 +61,16 @@
         <div class="kpi-sub">إجمالي المصروف</div>
       </div>
 
+      <!-- ✅ كارت واحد فيه أعلى مشروع (عدد + قيمة) -->
       <div class="card kpi-card">
-        <div class="kpi-label">أعلى مشروع (بالعدد)</div>
-        <div class="kpi-value" id="kpi_top_count_project">—</div>
-        <div class="kpi-sub" id="kpi_top_count_value">—</div>
-      </div>
+        <div class="kpi-label">أعلى مشروع</div>
 
-      <div class="card kpi-card">
-        <div class="kpi-label">أعلى مشروع (بالقيمة)</div>
-        <div class="kpi-value" id="kpi_top_paid_project">—</div>
+        <div class="kpi-sub" style="margin-top:6px;">بالعدد</div>
+        <div class="kpi-value" id="kpi_top_count_project" style="font-size:18px;">—</div>
+        <div class="kpi-sub" id="kpi_top_count_value">—</div>
+
+        <div class="kpi-sub" style="margin-top:10px;">بالقيمة (المصروف)</div>
+        <div class="kpi-value" id="kpi_top_paid_project" style="font-size:18px;">—</div>
         <div class="kpi-sub" id="kpi_top_paid_value">—</div>
       </div>
     </div>
@@ -87,12 +88,13 @@
             <select id="project"></select>
           </label>
 
+          <!-- ✅ Status values لازم 1/2/3 -->
           <label>الحالة:
             <select id="status">
               <option value="">الكل</option>
-              <option value="approved_not_transferred">معتمد ولم يحول</option>
-              <option value="not_approved_not_transferred">بدون اعتماد ولم يحول</option>
-              <option value="approved_transferred_partial">معتمد وتم تحويله (متبقي جزئي)</option>
+              <option value="1">بدون اعتماد ولم يحول</option>
+              <option value="2">معتمد ولم يحول</option>
+              <option value="3">معتمد وتم تحويله (متبقي جزئي)</option>
             </select>
           </label>
         </div>
@@ -100,7 +102,7 @@
         <div class="filter-row">
           <label>من:
             <div class="date-box">
-              <input id="date_from_txt" type="text" placeholder="YYYY-MM-DD أو DD/MM/YYYY">
+              <input id="date_from_txt" type="text" placeholder="DD/MM/YYYY">
               <button id="date_from_btn" class="nav-btn" type="button">📅</button>
               <input id="date_from_pick" type="date" style="display:none;">
             </div>
@@ -108,7 +110,7 @@
 
           <label>إلى:
             <div class="date-box">
-              <input id="date_to_txt" type="text" placeholder="YYYY-MM-DD أو DD/MM/YYYY">
+              <input id="date_to_txt" type="text" placeholder="DD/MM/YYYY">
               <button id="date_to_btn" class="nav-btn" type="button">📅</button>
               <input id="date_to_pick" type="date" style="display:none;">
             </div>
@@ -129,7 +131,9 @@
     <div class="card" style="margin-top:12px;">
       <div class="card-title">آخر 15 يوم — إجمالي / مصروف + %</div>
       <div id="chart" class="chart"></div>
-      <div class="small muted" style="margin-top:8px;">اضغط على أي يوم لفتح ملخص المشاريع ثم الإيميلات ثم تفاصيل الإيميل</div>
+      <div class="small muted" style="margin-top:8px;">
+        اضغط على أي يوم لفتح: ملخص المشاريع → إيميلات المشروع → تفاصيل الإيميل
+      </div>
     </div>
 
     <!-- Details table -->
@@ -154,7 +158,7 @@
       </div>
     </div>
 
-    <!-- Modal (تفاصيل مشروع/إيميل) -->
+    <!-- ✅ Email Modal (مع Prev/Next/Back + Scroll) -->
     <div id="emailModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal">
         <div class="modal-head">
