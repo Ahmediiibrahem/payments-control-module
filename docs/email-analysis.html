@@ -3,14 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>E-Mails Analysis – Cash Control</title>
+  <title>E-Mails Analysis | Payments Control</title>
 
+  <link rel="icon" type="image/png" href="./assets/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-
-  <link rel="icon" type="image/png" href="./assets/favicon.png">
-  <link rel="stylesheet" href="./assets/css/main.css">
+  <link rel="stylesheet" href="./assets/css/main.css?v=99">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -30,19 +29,18 @@
 
   <div class="container">
 
-    <!-- ✅ Topbar: 3 tabs -->
+    <!-- ✅ Topbar unified with Insights -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
         <a class="nav-btn" href="./email-analysis.html">E-Mails Analysis</a>
         <a class="nav-btn" href="./insights.html">Executive Insights</a>
       </div>
-
       <h1 class="page-title">E-Mails Analysis</h1>
     </div>
 
-    <!-- ✅ KPIs: 4 Cards فقط -->
-    <div class="grid kpi">
+    <!-- ✅ KPIs: 4 cards فقط -->
+    <div class="grid kpi" style="margin-top:12px;">
       <div class="card kpi-card">
         <div class="kpi-label">عدد الإيميلات</div>
         <div class="kpi-value" id="kpi_emails">—</div>
@@ -61,7 +59,6 @@
         <div class="kpi-sub">إجمالي المصروف</div>
       </div>
 
-      <!-- ✅ كارت واحد فيه أعلى مشروع (عدد + قيمة) -->
       <div class="card kpi-card">
         <div class="kpi-label">أعلى مشروع</div>
 
@@ -77,8 +74,9 @@
 
     <!-- Filters -->
     <div class="card" style="margin-top:12px;">
-      <div class="filters">
+      <div class="card-title">الفلاتر</div>
 
+      <div class="filters" style="margin-top:8px;">
         <div class="filter-row">
           <label>القطاع:
             <select id="sector"></select>
@@ -88,7 +86,7 @@
             <select id="project"></select>
           </label>
 
-          <!-- ✅ Status values لازم 1/2/3 -->
+          <!-- ✅ Status values = 1/2/3 -->
           <label>الحالة:
             <select id="status">
               <option value="">الكل</option>
@@ -100,20 +98,12 @@
         </div>
 
         <div class="filter-row">
-          <label>من:
-            <div class="date-box">
-              <input id="date_from_txt" type="text" placeholder="DD/MM/YYYY">
-              <button id="date_from_btn" class="nav-btn" type="button">📅</button>
-              <input id="date_from_pick" type="date" style="display:none;">
-            </div>
+          <label>من (ddmmyyyy أو dd/mm/yyyy):
+            <input id="date_from_txt" inputmode="numeric" placeholder="مثال: 12012025 أو 12/01/2025" />
           </label>
 
-          <label>إلى:
-            <div class="date-box">
-              <input id="date_to_txt" type="text" placeholder="DD/MM/YYYY">
-              <button id="date_to_btn" class="nav-btn" type="button">📅</button>
-              <input id="date_to_pick" type="date" style="display:none;">
-            </div>
+          <label>إلى (ddmmyyyy أو dd/mm/yyyy):
+            <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025 أو 31/01/2025" />
           </label>
 
           <div class="btn-row">
@@ -121,9 +111,8 @@
           </div>
         </div>
 
-        <div class="small">
-          <span id="meta">—</span>
-        </div>
+        <!-- ✅ meta + debug -->
+        <div class="small"><span id="meta">—</span></div>
       </div>
     </div>
 
@@ -132,14 +121,15 @@
       <div class="card-title">آخر 15 يوم — إجمالي / مصروف + %</div>
       <div id="chart" class="chart"></div>
       <div class="small muted" style="margin-top:8px;">
-        اضغط على أي يوم لفتح: ملخص المشاريع → إيميلات المشروع → تفاصيل الإيميل
+        اضغط على أي يوم: ملخص المشاريع → إيميلات المشروع → تفاصيل الإيميل
       </div>
     </div>
 
     <!-- Details table -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">تفاصيل الإيميلات بعد الفلتر</div>
-      <div class="table-wrap">
+
+      <div class="table-wrap" style="margin-top:10px;">
         <table>
           <thead>
             <tr>
@@ -158,7 +148,7 @@
       </div>
     </div>
 
-    <!-- ✅ Email Modal (مع Prev/Next/Back + Scroll) -->
+    <!-- ✅ Email Modal (Prev/Next + Back + scroll) -->
     <div id="emailModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal">
         <div class="modal-head">
@@ -197,7 +187,8 @@
 
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- PapaParse -->
+  <script src="./assets/vendor/papaparse.min.js"></script>
   <script type="module" src="./src/email_analysis.js"></script>
 </body>
 </html>
