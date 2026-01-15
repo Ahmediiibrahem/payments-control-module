@@ -35,12 +35,13 @@ function normalizeHeaderKey(h){
   return String(h ?? "").trim().replace(/\s+/g, "_");
 }
 
-/* Date parser */
+/* ✅ Date parser (Excel serial / ISO / ddmmyyyy / dd/mm/yyyy) */
 function parseDateSmart(txt){
   if (txt === null || txt === undefined) return null;
   const s0 = String(txt).trim();
   if (!s0) return null;
 
+  // Excel serial
   if (/^\d+(\.\d+)?$/.test(s0)) {
     const num = Number(s0);
     if (num > 20000 && num < 80000) {
@@ -50,17 +51,20 @@ function parseDateSmart(txt){
     }
   }
 
+  // ISO
   if (/^\d{4}-\d{2}-\d{2}/.test(s0)){
     const d = new Date(s0);
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // DD/MM/YYYY or DD-MM-YYYY
   let m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(s0);
   if (m){
     const d = new Date(Date.UTC(+m[3], +m[2]-1, +m[1]));
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // 8 digits: ddmmyyyy or yyyymmdd
   const digits = s0.replace(/\D/g, "");
   if (digits.length === 8){
     const yyyy = +digits.slice(0,4);
@@ -116,7 +120,7 @@ function parseCSV(text){
   return res.data || [];
 }
 
-// Flexible getters
+// ---------- Flexible getters ----------
 function findKeyContains(raw, parts){
   const keys = Object.keys(raw || {});
   for (const k of keys){
@@ -224,7 +228,7 @@ function statusFromDates(pay, appr, paid){
   return "";
 }
 
-// Data
+// ---------- Data ----------
 let data = [];
 let projectsBySector = new Map();
 let sectorLabelByKey = new Map();
@@ -258,6 +262,7 @@ function normalizeRow(raw){
   const amount_paid = toNumber(nums.paid);
   const amount_canceled = toNumber(nums.canceled);
 
+  // ✅ صافي القيمة (Total - Canceled)
   const effective_total = Math.max(0, amount_total - amount_canceled);
 
   const sectorKey = normText(sector);
@@ -280,7 +285,7 @@ function normalizeRow(raw){
   };
 }
 
-// Filters
+// ---------- Filters ----------
 function parseUserDateInput(txt){
   const t = String(txt ?? "").trim();
   if (!t) return null;
@@ -307,15 +312,19 @@ function filterRowByControls(r){
   if ((fromUTC || toUTC) && !inRangeUTC(r._emailDate, fromUTC, toUTC)) return false;
   return true;
 }
+
+// ✅ Email rows: time + date فقط (Vendor اختياري)
 function rowsEmailsOnly(rows){
-  return (rows || []).filter(r => r.time && r._emailDate); // vendor مش شرط
+  return (rows || []).filter(r => r.time && r._emailDate);
 }
 
-// Grouping
+// ---------- Grouping (Email groups) ----------
 function groupEmails(rows){
   const map = new Map();
   for (const r of rows){
     const dlab = dayLabel(r._emailDate);
+
+    // ✅ كل (Project + Sector + Time + Day) = Email واحد
     const key = `${r.sectorKey}|||${r.projectKey}|||${r.time}|||${dlab}`;
 
     if (!map.has(key)){
@@ -333,9 +342,10 @@ function groupEmails(rows){
         status: r._status,
         total: 0,
         paid: 0,
-        rows: []
+        rows: [] // تفاصيل الموردين
       });
     }
+
     const g = map.get(key);
     g.total += r.effective_total;
     g.paid  += r.amount_paid;
@@ -360,15 +370,15 @@ function filterGroups(groups){
   });
 }
 
-// KPI Top Project (format)
+// ---------- KPI Top Project ----------
 function setTopProjectKPIs(groups){
   const byCount = new Map();
   const byValue = new Map();
 
   for (const g of (groups || [])){
     const p = g.project || "(بدون مشروع)";
-    byCount.set(p, (byCount.get(p) || 0) + 1);
-    byValue.set(p, (byValue.get(p) || 0) + (g.total || 0));
+    byCount.set(p, (byCount.get(p) || 0) + 1);         // عدد الإيميلات
+    byValue.set(p, (byValue.get(p) || 0) + (g.total||0)); // إجمالي القيمة
   }
 
   let topCountP="—", topCount=0;
@@ -385,7 +395,9 @@ function setTopProjectKPIs(groups){
   $("kpi_top_value_line").textContent = topValP==="—" ? "قيمة: —" : `قيمة: ${topValP} (${fmtMoney(topVal)})`;
 }
 
-// Drill Modal
+// =====================
+// Drill Modal (Chart only)
+// =====================
 let __drillStack = [];
 
 function openDrill(){
@@ -420,7 +432,7 @@ function setBackVisible(){
   };
 }
 
-/* تفاصيل الإيميل نفسه (Vendor breakdown) */
+/* تفاصيل الإيميل فقط (Vendor breakdown) */
 function drillRenderEmailDetails(g){
   const title = $("drillTitle");
   const sub = $("drillSub");
@@ -433,7 +445,9 @@ function drillRenderEmailDetails(g){
   const pct = total > 0 ? clamp(Math.round((paid/total)*100),0,100) : 0;
 
   title.textContent = `${g?.project || "—"} — تفاصيل الإيميل`;
-  sub.textContent = `القطاع: ${g?.sector || "—"} | تاريخ: ${g?.day || "—"} (${g?.dayName || ""}) | الوقت: ${g?.time || "—"} | إجمالي: ${fmtMoney(total)} | المنصرف: ${fmtMoney(paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
+  sub.textContent =
+    `القطاع: ${g?.sector || "—"} | تاريخ: ${g?.day || "—"} (${g?.dayName || ""}) | الوقت: ${g?.time || "—"}`
+    + ` | إجمالي: ${fmtMoney(total)} | المنصرف: ${fmtMoney(paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
 
   thead.innerHTML = `
     <tr>
@@ -467,7 +481,7 @@ function drillRenderEmailDetails(g){
   setBackVisible();
 }
 
-/* (Chart drill) day -> projects -> (1 email => details) or (many => email list => details) */
+/* Day -> projects -> (1 email => details) or (many => email list => details) */
 function drillRenderDay(dayStr, groupsScope){
   const title = $("drillTitle");
   const sub = $("drillSub");
@@ -540,7 +554,7 @@ function drillRenderProject(dayStr, project, groupsScope){
   const list = (groupsScope || [])
     .filter(g => g.day === dayStr && (g.project || "(بدون مشروع)") === project)
     .slice()
-    .sort((a,b)=> (b.date?.getTime()||0) - (a.date?.getTime()||0) || (b.timeMin||0) - (a.timeMin||0));
+    .sort((a,b)=> (b.timeMin||0) - (a.timeMin||0));
 
   if (list.length <= 1){
     drillRenderEmailDetails(list[0]);
@@ -600,7 +614,7 @@ function drillRenderProject(dayStr, project, groupsScope){
   setBackVisible();
 }
 
-// Chart
+// ---------- Chart ----------
 function renderChart(groupsScope){
   const chart = $("chart");
   chart.innerHTML = "";
@@ -665,7 +679,7 @@ function renderChart(groupsScope){
   });
 }
 
-// ✅ Details table (رجعنا سلوكه + ترتيب + أعمدة)
+// ✅ Details table: صف واحد لكل Email group (مش سطور الموردين)
 function renderDetailTable(groups){
   const tbody = $("detail_rows");
 
@@ -695,7 +709,7 @@ function renderDetailTable(groups){
     `;
   }).join("") || `<tr><td colspan="9">لا توجد بيانات</td></tr>`;
 
-  // ✅ CLICK = open email details ONLY (مش day/projects)
+  // ✅ click: opens email details ONLY
   tbody.onclick = (e)=>{
     const tr = e.target.closest("tr[data-key]");
     if (!tr) return;
@@ -704,13 +718,13 @@ function renderDetailTable(groups){
     if (!g) return;
 
     openDrill();
-    __drillStack = [];       // no project/day stack here
-    setBackVisible();        // hidden
+    __drillStack = [];
+    setBackVisible(); // hidden
     drillRenderEmailDetails(g);
   };
 }
 
-// Dropdowns
+// ---------- Dropdown helpers ----------
 function uniqSorted(arr){
   return Array.from(new Set(arr.filter(Boolean))).sort((a,b)=> a.localeCompare(b));
 }
@@ -730,11 +744,12 @@ function rebuildProjectDropdownForSector(){
   setSelectOptions("project", labels);
 }
 
-// Render
+// ---------- Render ----------
 function render(){
+  // ✅ rows = تفاصيل (vendors) — groups = emails
   const emailRows = rowsEmailsOnly(data).filter(filterRowByControls);
   const groupsAll = groupEmails(emailRows);
-  const groups = filterGroups(groupsAll);
+  const groups = filterGroups(groupsAll); // ✅ this is EMAILS after filter
 
   const totalEff = groups.reduce((a,g)=>a+g.total,0);
   const paid = groups.reduce((a,g)=>a+g.paid,0);
@@ -745,6 +760,7 @@ function render(){
 
   setTopProjectKPIs(groups);
 
+  // Debug
   const dbgTotal = data.length;
   const dbgTime = data.filter(r => r.time).length;
   const dbgDate = data.filter(r => r._emailDate).length;
@@ -755,10 +771,10 @@ function render(){
     + ` || Debug: total=${dbgTotal}, time=${dbgTime}, date=${dbgDate}, emailRows=${dbgEmailRows}, groupsAll=${groupsAll.length}`;
 
   renderChart(groups);
-  renderDetailTable(groups);
+  renderDetailTable(groups); // ✅ IMPORTANT: groups not rows
 }
 
-// Init
+// ---------- Init ----------
 async function init(){
   const res = await fetch(DATA_SOURCE.cashCsvUrl, { cache:"no-store" });
   if (!res.ok){
@@ -769,6 +785,7 @@ async function init(){
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
+  // sector/project maps
   projectsBySector = new Map();
   for (const r of data){
     if (!r.sectorKey || !r.projectKey) continue;
@@ -776,6 +793,7 @@ async function init(){
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   }
 
+  // dropdowns
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   $("sector").innerHTML =
     `<option value="">الكل</option>` +
