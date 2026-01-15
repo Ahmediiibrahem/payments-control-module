@@ -175,7 +175,12 @@ function pickVendor(raw){
   return k ? String(raw[k]).trim() : "";
 }
 function pickVendorCode(raw){
-  // مرن جدًا عشان اختلاف أسماء الأعمدة
+  // ✅ العمود عندك اسمه code
+  if (raw.code !== undefined) return String(raw.code).trim();
+  if (raw.Code !== undefined) return String(raw.Code).trim();
+  if (raw.CODE !== undefined) return String(raw.CODE).trim();
+
+  // fallback لأي أسماء محتملة
   const k =
     raw.Vendor_Code !== undefined ? "Vendor_Code" :
     raw.vendor_code !== undefined ? "vendor_code" :
@@ -184,9 +189,12 @@ function pickVendorCode(raw){
     raw.Vendor_ID !== undefined ? "Vendor_ID" :
     raw.vendor_id !== undefined ? "vendor_id" :
     findKeyContains(raw, ["vendor", "code"]) ||
-    findKeyContains(raw, ["vendor", "id"]);
+    findKeyContains(raw, ["vendor", "id"]) ||
+    findKeyContains(raw, ["code"]);
+
   return k ? String(raw[k]).trim() : "";
 }
+
 function pickDates(raw){
   const payKey =
     raw.Payment_Request_Date !== undefined ? "Payment_Request_Date" :
