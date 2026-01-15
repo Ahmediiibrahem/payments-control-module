@@ -9,9 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=200">
+  <link rel="stylesheet" href="./assets/css/main.css?v=201">
 
-  <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -29,7 +28,6 @@
 
   <div class="container">
 
-    <!-- ✅ Topbar unified -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
@@ -39,7 +37,7 @@
       <h1 class="page-title">E-Mails Analysis</h1>
     </div>
 
-    <!-- ✅ KPIs: 4 cards only -->
+    <!-- KPIs -->
     <div class="grid kpi" style="margin-top:12px;">
       <div class="card kpi-card">
         <div class="kpi-label">عدد الإيميلات</div>
@@ -59,7 +57,6 @@
         <div class="kpi-sub">إجمالي المصروف</div>
       </div>
 
-      <!-- ✅ Top Project card EXACT formatting you want -->
       <div class="card kpi-card">
         <div class="kpi-label">أعلى مشروع</div>
         <div class="kpi-sub" id="kpi_top_count_line" style="margin-top:8px;">عدد: —</div>
@@ -118,7 +115,7 @@
       </div>
     </div>
 
-    <!-- Details table -->
+    <!-- Details table (✅ رجعناه زي ما كان) -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">تفاصيل الإيميلات بعد الفلتر</div>
 
@@ -126,12 +123,13 @@
         <table>
           <thead>
             <tr>
-              <th>اليوم</th>
               <th>القطاع</th>
               <th>المشروع</th>
+              <th>تاريخ</th>
+              <th>اليوم</th>
               <th>الوقت</th>
-              <th>قيمة طلبات الصرف</th>
-              <th>قيمة المصروف</th>
+              <th>قيمة طلب الصرف</th>
+              <th>المنصرف</th>
               <th>المتبقي</th>
               <th>%</th>
             </tr>
@@ -141,7 +139,7 @@
       </div>
     </div>
 
-    <!-- ✅ Drill Modal -->
+    <!-- Drill Modal -->
     <div id="drillModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal">
         <div class="modal-head">
