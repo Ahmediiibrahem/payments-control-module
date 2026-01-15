@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>E-Mails Analysis</title>
+  <title>E-Mails Analysis – Cash Control</title>
 
-  <link rel="icon" type="image/png" href="./assets/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=35">
+
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+  <link rel="stylesheet" href="./assets/css/main.css">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -23,49 +24,60 @@
 
 <body>
   <script type="module">
-  import { requireAuth } from "./src/auth.js";
-  requireAuth();
-</script>
+    import { requireAuth } from "./src/auth.js";
+    requireAuth();
+  </script>
 
   <div class="container">
 
+    <!-- ✅ Unified Topbar -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
         <a class="nav-btn" href="./email-analysis.html">E-Mails Analysis</a>
+        <a class="nav-btn" href="./insights.html">Executive Insights</a>
       </div>
+
       <h1 class="page-title">E-Mails Analysis</h1>
     </div>
 
     <!-- KPIs -->
     <div class="grid kpi">
       <div class="card kpi-card">
-        <div class="kpi-label">إجمالي الإيميلات</div>
+        <div class="kpi-label">عدد الإيميلات</div>
         <div class="kpi-value" id="kpi_emails">—</div>
+        <div class="kpi-sub">بعد الفلتر</div>
       </div>
 
       <div class="card kpi-card">
-        <div class="kpi-label">إجمالي طلبات الصرف</div>
+        <div class="kpi-label">قيمة طلبات الصرف</div>
         <div class="kpi-value" id="kpi_total_amount">—</div>
+        <div class="kpi-sub">إجمالي صافي القيمة</div>
       </div>
 
       <div class="card kpi-card">
-        <div class="kpi-label">إجمالي المصروف</div>
+        <div class="kpi-label">قيمة المصروف</div>
         <div class="kpi-value" id="kpi_paid_amount">—</div>
+        <div class="kpi-sub">إجمالي المصروف</div>
       </div>
 
       <div class="card kpi-card">
-        <div class="kpi-label">أعلى مشروع</div>
-        <div class="kpi-sub" style="margin-top:2px;">
-          بالعدد: <b id="kpi_top_count_project">—</b> (<span id="kpi_top_count_value">—</span>)<br/>
-          بالمصروف: <b id="kpi_top_paid_project">—</b> (<span id="kpi_top_paid_value">—</span>)
-        </div>
+        <div class="kpi-label">أعلى مشروع (بالعدد)</div>
+        <div class="kpi-value" id="kpi_top_count_project">—</div>
+        <div class="kpi-sub" id="kpi_top_count_value">—</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">أعلى مشروع (بالقيمة)</div>
+        <div class="kpi-value" id="kpi_top_paid_project">—</div>
+        <div class="kpi-sub" id="kpi_top_paid_value">—</div>
       </div>
     </div>
 
     <!-- Filters -->
     <div class="card" style="margin-top:12px;">
       <div class="filters">
+
         <div class="filter-row">
           <label>القطاع:
             <select id="sector"></select>
@@ -78,26 +90,26 @@
           <label>الحالة:
             <select id="status">
               <option value="">الكل</option>
-              <option value="1">طلب صرف بدون إعتماد ولم يحول</option>
-              <option value="2">طلب صرف معتمد ولم يحول</option>
-              <option value="3">طلب صرف معتمد وتم تحويلة</option>
+              <option value="approved_not_transferred">معتمد ولم يحول</option>
+              <option value="not_approved_not_transferred">بدون اعتماد ولم يحول</option>
+              <option value="approved_transferred_partial">معتمد وتم تحويله (متبقي جزئي)</option>
             </select>
           </label>
         </div>
 
         <div class="filter-row">
-          <label>من (ddmmyyyy):
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input id="date_from_txt" inputmode="numeric" placeholder="مثال: 12012025" />
-              <button id="date_from_btn" type="button" title="اختيار من الكاليندر">📅</button>
+          <label>من:
+            <div class="date-box">
+              <input id="date_from_txt" type="text" placeholder="YYYY-MM-DD أو DD/MM/YYYY">
+              <button id="date_from_btn" class="nav-btn" type="button">📅</button>
               <input id="date_from_pick" type="date" style="display:none;">
             </div>
           </label>
 
-          <label>إلى (ddmmyyyy):
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025" />
-              <button id="date_to_btn" type="button" title="اختيار من الكاليندر">📅</button>
+          <label>إلى:
+            <div class="date-box">
+              <input id="date_to_txt" type="text" placeholder="YYYY-MM-DD أو DD/MM/YYYY">
+              <button id="date_to_btn" class="nav-btn" type="button">📅</button>
               <input id="date_to_pick" type="date" style="display:none;">
             </div>
           </label>
@@ -115,8 +127,9 @@
 
     <!-- Chart -->
     <div class="card" style="margin-top:12px;">
-      <div class="card-title">قيمة طلبات الصرف (آخر 15 يوم)</div>
-      <div id="chart" class="chart" style="margin-top:10px;"></div>
+      <div class="card-title">آخر 15 يوم — إجمالي / مصروف + %</div>
+      <div id="chart" class="chart"></div>
+      <div class="small muted" style="margin-top:8px;">اضغط على أي يوم لفتح ملخص المشاريع ثم الإيميلات ثم تفاصيل الإيميل</div>
     </div>
 
     <!-- Details table -->
@@ -149,7 +162,13 @@
             <div id="modalTitle" class="modal-title">—</div>
             <div id="modalSub" class="modal-sub">—</div>
           </div>
-          <button id="modalClose" class="modal-close" aria-label="Close">✕</button>
+
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="emailBack" class="nav-btn" style="display:none; opacity:.9;">↩ رجوع</button>
+            <button id="emailPrev" class="nav-btn" style="display:none; opacity:.9;">⟵ السابق</button>
+            <button id="emailNext" class="nav-btn" style="display:none; opacity:.9;">التالي ⟶</button>
+            <button id="modalClose" class="modal-close" aria-label="Close">✕</button>
+          </div>
         </div>
 
         <div class="modal-body">
