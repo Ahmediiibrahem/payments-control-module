@@ -258,8 +258,10 @@ function rebuildProjectDropdownForSector() {
 
 // ✅ FIX اختفاء الداتا: vendor بقى اختياري (كان سبب اختفاء)【turn9file4†email_analysis.js†L83-L85】
 function rowsEmailsOnly(rows){
+  // ✅ Vendor بقى اختياري (ده كان سبب اختفاء الداتا)
   return rows.filter(r => r.time && r._emailDate);
 }
+
 
 function parseUserDateInput(txt){
   const t = normText(txt);
