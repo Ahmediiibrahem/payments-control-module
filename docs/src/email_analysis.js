@@ -40,8 +40,8 @@ function normalizeHeaderKey(h){
 }
 
 /**
- * ✅ parseDateSmart supports:
- * - Excel serial (e.g., 45200)
+ * Supports:
+ * - Excel serial (45200)
  * - YYYY-MM-DD
  * - DD/MM/YYYY or DD-MM-YYYY
  * - 8 digits: ddmmyyyy or yyyymmdd
@@ -54,9 +54,8 @@ function parseDateSmart(txt){
   // Excel serial
   if (/^\d+(\.\d+)?$/.test(s0)) {
     const num = Number(s0);
-    // safe range for modern dates
     if (num > 20000 && num < 80000) {
-      const d = new Date(Date.UTC(1899, 11, 30)); // Excel epoch
+      const d = new Date(Date.UTC(1899, 11, 30));
       d.setUTCDate(d.getUTCDate() + Math.floor(num));
       return isNaN(d.getTime()) ? null : d;
     }
@@ -130,16 +129,7 @@ function parseCSV(text){
   return res.data || [];
 }
 
-// ============================
-// Flexible column getters
-// ============================
-function pickFirst(raw, candidates){
-  for (const c of candidates){
-    if (raw[c] !== undefined && raw[c] !== null && String(raw[c]).trim() !== "") return raw[c];
-  }
-  return "";
-}
-
+// ---------- Flexible getters ----------
 function findKeyContains(raw, parts){
   const keys = Object.keys(raw || {});
   for (const k of keys){
@@ -150,7 +140,6 @@ function findKeyContains(raw, parts){
 }
 
 function pickTime(raw){
-  // try exacttime first
   const exactKey =
     raw.Exacttime !== undefined ? "Exacttime" :
     raw.exacttime !== undefined ? "exacttime" :
@@ -163,7 +152,6 @@ function pickTime(raw){
     raw.Time !== undefined ? "Time" :
     raw.time !== undefined ? "time" :
     raw.TIME !== undefined ? "TIME" :
-    raw.time_value !== undefined ? "time_value" :
     findKeyContains(raw, ["time"]);
 
   const v1 = exactKey ? String(raw[exactKey]).trim() : "";
@@ -193,7 +181,6 @@ function pickVendor(raw){
 }
 
 function pickDates(raw){
-  // try known names, then fallback by contains
   const payKey =
     raw.Payment_Request_Date !== undefined ? "Payment_Request_Date" :
     raw.payment_request_date !== undefined ? "payment_request_date" :
@@ -223,7 +210,6 @@ function pickDates(raw){
 }
 
 function pickNumbers(raw){
-  // try mapped headers then fallback by contains
   const totalKey =
     raw.Amount_Total !== undefined ? "Amount_Total" :
     raw.amount_total !== undefined ? "amount_total" :
@@ -257,16 +243,13 @@ function statusFromDates(pay, appr, paid){
   return "";
 }
 
-// ============================
-// Data normalization
-// ============================
+// ---------- Data normalization ----------
 let data = [];
 let projectsBySector = new Map();
 let sectorLabelByKey = new Map();
 let projectLabelByKey = new Map();
 
 function normalizeRow(raw){
-  // apply HEADER_MAP if exists (safe)
   const mapped = {};
   for (const [k, v] of Object.entries(raw || {})){
     const kk = normalizeHeaderKey(k);
@@ -277,7 +260,6 @@ function normalizeRow(raw){
   const sector = pickSector(mapped) || pickSector(raw) || "(بدون قطاع)";
   const project = pickProject(mapped) || pickProject(raw) || "(بدون مشروع)";
   const vendor = pickVendor(mapped) || pickVendor(raw) || "";
-
   const time = pickTime(mapped) || pickTime(raw);
 
   const dates = pickDates(mapped);
@@ -323,9 +305,7 @@ function normalizeRow(raw){
   };
 }
 
-// ============================
-// Filters
-// ============================
+// ---------- Filters ----------
 function parseUserDateInput(txt){
   const t = String(txt ?? "").trim();
   if (!t) return null;
@@ -356,14 +336,12 @@ function filterRowByControls(r){
   return true;
 }
 
-// ✅ FIX: vendor مش شرط
+// ✅ Email rows: time + date فقط (vendor مش شرط)
 function rowsEmailsOnly(rows){
   return (rows || []).filter(r => r.time && r._emailDate);
 }
 
-// ============================
-// Grouping (Email Groups)
-// ============================
+// ---------- Grouping (Email Groups) ----------
 function groupEmails(rows){
   const map = new Map();
   for (const r of rows){
@@ -413,131 +391,49 @@ function filterGroups(groups){
   });
 }
 
-// ============================
-// KPIs
-// ============================
+// ---------- KPI: أعلى مشروع بالشكل المطلوب ----------
 function setTopProjectKPIs(groups){
+  // أعلى مشروع بالعدد (عدد الإيميلات)
   const byCount = new Map();
-  const byPaid  = new Map();
+  // أعلى مشروع بالقيمة (إجمالي total)
+  const byValue = new Map();
 
   for (const g of (groups || [])){
     const p = g.project || "(بدون مشروع)";
     byCount.set(p, (byCount.get(p) || 0) + 1);
-    byPaid.set(p, (byPaid.get(p) || 0) + (g.paid || 0));
+    byValue.set(p, (byValue.get(p) || 0) + (g.total || 0));
   }
 
-  let topCountP = "—", topCountV = "—";
-  if (byCount.size){
-    let bestP = null, bestV = -1;
-    for (const [p,v] of byCount.entries()){
-      if (v > bestV){ bestV = v; bestP = p; }
+  let topCountProject = "—";
+  let topCount = 0;
+  for (const [p, c] of byCount.entries()){
+    if (c > topCount){
+      topCount = c;
+      topCountProject = p;
     }
-    topCountP = bestP ?? "—";
-    topCountV = String(bestV);
   }
 
-  let topPaidP = "—", topPaidV = "—";
-  if (byPaid.size){
-    let bestP = null, bestV = -1;
-    for (const [p,v] of byPaid.entries()){
-      if (v > bestV){ bestV = v; bestP = p; }
+  let topValueProject = "—";
+  let topValue = 0;
+  for (const [p, v] of byValue.entries()){
+    if (v > topValue){
+      topValue = v;
+      topValueProject = p;
     }
-    topPaidP = bestP ?? "—";
-    topPaidV = fmtMoney(bestV);
   }
 
-  $("kpi_top_count_project").textContent = topCountP;
-  $("kpi_top_count_value").textContent = topCountV;
+  $("kpi_top_count_line").textContent =
+    topCountProject === "—" ? "عدد: —" : `عدد: ${topCountProject} (${topCount})`;
 
-  $("kpi_top_paid_project").textContent = topPaidP;
-  $("kpi_top_paid_value").textContent = topPaidV;
+  $("kpi_top_value_line").textContent =
+    topValueProject === "—" ? "قيمة: —" : `قيمة: ${topValueProject} (${fmtMoney(topValue)})`;
 }
 
 // ============================
-// Modal: Email details + Prev/Next + Back
-// ============================
-let __navList = [];
-let __navIndex = -1;
-let __backRender = null;
-
-function openModalWithNav(list, idx, backRender){
-  __navList = Array.isArray(list) ? list : [];
-  __navIndex = clamp(idx, 0, Math.max(0, __navList.length-1));
-  __backRender = typeof backRender === "function" ? backRender : null;
-
-  const g = __navList[__navIndex];
-  if (g) openEmailModal(g);
-}
-
-function openEmailModal(group){
-  const modal = $("emailModal");
-  if (!modal) return;
-
-  const remain = Math.max(0, group.total - group.paid);
-  const pct = group.total > 0 ? clamp(Math.round((group.paid / group.total) * 100), 0, 100) : 0;
-
-  $("modalTitle").textContent = `${group.sector} — ${group.project}`;
-  $("modalSub").textContent =
-    `اليوم: ${group.day} | الوقت: ${group.time} | إجمالي: ${fmtMoney(group.total)} | المصروف: ${fmtMoney(group.paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
-
-  const rows = group.rows || [];
-  $("modalRows").innerHTML = rows.map((r, i)=>{
-    const eff = r.effective_total || 0;
-    const paid = r.amount_paid || 0;
-    const rem = Math.max(0, eff - paid);
-    return `
-      <tr>
-        <td>${i+1}</td>
-        <td>${escHtml(r.code || "—")}</td>
-        <td>${escHtml(r.vendor || "—")}</td>
-        <td>${fmtMoney(eff)}</td>
-        <td>${fmtMoney(paid)}</td>
-        <td>${fmtMoney(rem)}</td>
-      </tr>
-    `;
-  }).join("") || `<tr><td colspan="6">لا توجد بيانات</td></tr>`;
-
-  const prevBtn = $("emailPrev");
-  const nextBtn = $("emailNext");
-  const backBtn = $("emailBack");
-
-  const hasNav = (__navList.length > 1);
-  prevBtn.style.display = hasNav ? "inline-flex" : "none";
-  nextBtn.style.display = hasNav ? "inline-flex" : "none";
-
-  backBtn.style.display = __backRender ? "inline-flex" : "none";
-  backBtn.onclick = ()=>{ if (__backRender) __backRender(); };
-
-  prevBtn.onclick = ()=>{
-    __navIndex = clamp(__navIndex - 1, 0, __navList.length-1);
-    openEmailModal(__navList[__navIndex]);
-  };
-  nextBtn.onclick = ()=>{
-    __navIndex = clamp(__navIndex + 1, 0, __navList.length-1);
-    openEmailModal(__navList[__navIndex]);
-  };
-
-  modal.classList.add("show");
-  modal.setAttribute("aria-hidden","false");
-
-  const close = ()=>{
-    modal.classList.remove("show");
-    modal.setAttribute("aria-hidden","true");
-    $("modalClose").removeEventListener("click", close);
-    modal.removeEventListener("click", onBackdrop);
-    document.removeEventListener("keydown", onEsc);
-    __backRender = null;
-  };
-  const onBackdrop = (e)=>{ if (e.target === modal) close(); };
-  const onEsc = (e)=>{ if (e.key === "Escape") close(); };
-
-  $("modalClose").addEventListener("click", close);
-  modal.addEventListener("click", onBackdrop);
-  document.addEventListener("keydown", onEsc);
-}
-
-// ============================
-// Day Modal: Day → Projects → Emails
+// ✅ Day Modal (drill-down) — مطابق للي طلبته
+// day → projects
+// project (if 1 email) → email details مباشرة
+// project (if >1) → emails summary → email details
 // ============================
 let __dayHistory = [];
 
@@ -562,6 +458,7 @@ function ensureDayModal(){
           <button id="dayModalClose" class="modal-close" aria-label="Close">✕</button>
         </div>
       </div>
+
       <div class="modal-body">
         <div class="table-wrap">
           <table>
@@ -615,6 +512,7 @@ function openDayModal(dayStr, groupsScope){
     dayBackVisible();
   };
 
+  // --- View 1: Day Summary (projects) ---
   const renderDaySummary = ()=>{
     const title = document.getElementById("dayModalTitle");
     const sub = document.getElementById("dayModalSub");
@@ -675,25 +573,44 @@ function openDayModal(dayStr, groupsScope){
       const tr = e.target.closest("tr[data-project]");
       if (!tr) return;
       const project = tr.getAttribute("data-project");
-      renderProjectEmails(project);
+      renderProjectDrill(project);
     };
 
     dayBackVisible();
   };
 
-  const renderProjectEmails = (project)=>{
+  // --- View 2: Project Drill ---
+  // if 1 email -> email details مباشرة
+  // if >1 -> emails summary list, then click -> details
+  const renderProjectDrill = (project)=>{
+    const list = (groupsScope || [])
+      .filter(g => g.day === dayStr && (g.project || "(بدون مشروع)") === project)
+      .slice()
+      .sort((a,b)=> (a.timeMin ?? 0) - (b.timeMin ?? 0));
+
+    __dayHistory.push(renderDaySummary);
+    dayBackVisible();
+
+    if (list.length <= 1){
+      // ✅ Option 1: single email => open details مباشرة
+      const g = list[0];
+      renderEmailDetails(project, g, () => renderDaySummary());
+      return;
+    }
+
+    // ✅ Option 2: multiple emails => show emails summary first
+    renderEmailsSummary(project, list);
+  };
+
+  const renderEmailsSummary = (project, list)=>{
     const title = document.getElementById("dayModalTitle");
     const sub = document.getElementById("dayModalSub");
     const thead = document.getElementById("dayThead");
     const tbody = document.getElementById("dayTbody");
 
-    __dayHistory.push(renderDaySummary);
-    dayBackVisible();
-
-    const list = (groupsScope || [])
-      .filter(g => g.day === dayStr && (g.project || "(بدون مشروع)") === project)
-      .slice()
-      .sort((a,b)=> (a.timeMin ?? 0) - (b.timeMin ?? 0));
+    // push back to project drill (to keep hierarchy stable)
+    __dayHistory.push(() => renderProjectDrill(project));
+    __dayHistory.pop(); // prevent double push; we already pushed in renderProjectDrill
 
     const tot = list.reduce((a,x)=>a+x.total,0);
     const paid = list.reduce((a,x)=>a+x.paid,0);
@@ -705,7 +622,7 @@ function openDayModal(dayStr, groupsScope){
 
     thead.innerHTML = `
       <tr>
-        <th>الوقت</th>
+        <th>الإيميل</th>
         <th>إجمالي</th>
         <th>المصروف</th>
         <th>المتبقي</th>
@@ -731,16 +648,78 @@ function openDayModal(dayStr, groupsScope){
       const tr = e.target.closest("tr[data-idx]");
       if (!tr) return;
       const idx = +tr.getAttribute("data-idx");
-      openModalWithNav(list, idx, () => renderProjectEmails(project));
+      const g = list[idx];
+      if (!g) return;
+
+      __dayHistory.push(() => renderEmailsSummary(project, list));
+      dayBackVisible();
+
+      renderEmailDetails(project, g, () => renderEmailsSummary(project, list));
     };
+
+    dayBackVisible();
+  };
+
+  // --- View 3: Email Details (the exact columns you asked) ---
+  // م - اسم المورد - القيمة - المصروف - المتبقي - النسبة
+  const renderEmailDetails = (project, g, backFn)=>{
+    const title = document.getElementById("dayModalTitle");
+    const sub = document.getElementById("dayModalSub");
+    const thead = document.getElementById("dayThead");
+    const tbody = document.getElementById("dayTbody");
+
+    const total = g?.total || 0;
+    const paid = g?.paid || 0;
+    const remain = Math.max(0, total - paid);
+    const pct = total > 0 ? clamp(Math.round((paid/total)*100),0,100) : 0;
+
+    title.textContent = `تفاصيل مشروع: ${project}`;
+    sub.textContent = `اليوم: ${dayStr} | الإيميل: ${g?.time || "—"} | إجمالي: ${fmtMoney(total)} | المصروف: ${fmtMoney(paid)} | المتبقي: ${fmtMoney(remain)} | ${pct}%`;
+
+    thead.innerHTML = `
+      <tr>
+        <th>م</th>
+        <th>اسم المورد</th>
+        <th>القيمة</th>
+        <th>المصروف</th>
+        <th>المتبقي</th>
+        <th>%</th>
+      </tr>
+    `;
+
+    const rows = (g?.rows || []).slice();
+
+    tbody.innerHTML = rows.map((r,i)=>{
+      const v = r.vendor || "—";
+      const val = r.effective_total || 0;
+      const p = r.amount_paid || 0;
+      const rem = Math.max(0, val - p);
+      const pp = val > 0 ? clamp(Math.round((p/val)*100),0,100) : 0;
+
+      return `
+        <tr>
+          <td>${i+1}</td>
+          <td>${escHtml(v)}</td>
+          <td>${fmtMoney(val)}</td>
+          <td>${fmtMoney(p)}</td>
+          <td>${fmtMoney(rem)}</td>
+          <td>${pp}%</td>
+        </tr>
+      `;
+    }).join("") || `<tr><td colspan="6">لا توجد بيانات</td></tr>`;
+
+    // Back already handled by history; still keep it consistent:
+    if (typeof backFn === "function") {
+      // no-op; back button uses history
+    }
+
+    dayBackVisible();
   };
 
   renderDaySummary();
 }
 
-// ============================
-// Chart
-// ============================
+// ---------- Chart ----------
 function renderChart(groupsScope){
   const chart = $("chart");
   chart.innerHTML = "";
@@ -774,20 +753,16 @@ function renderChart(groupsScope){
   chart.innerHTML = days.map(d=>{
     const dl = dayLabel(d);
     const a = agg.get(dl) || { total:0, paid:0 };
-
     const has = a.total > 0;
     const pct = has ? clamp(Math.round((a.paid / a.total) * 100), 0, 100) : 0;
-
-    const stackHeight = has ? 100 : 0;
-    const paidExtraStyle = (has && pct > 0 && pct < 10) ? "min-height:18px;" : "";
 
     return `
       <div class="chart-group" data-day="${dl}">
         <div class="chart-bars" title="${has ? `Total: ${fmtMoney(a.total)} | Paid: ${fmtMoney(a.paid)} | ${pct}%` : "No emails"}">
-          <div class="bar-stack" style="height:${stackHeight}%; overflow:visible;">
+          <div class="bar-stack" style="height:${has ? 100 : 0}%; overflow:visible;">
             <div class="bar-top-value">${has ? fmtMoney(a.total) : ""}</div>
             ${has ? `
-              <div class="bar-paid" style="height:${pct}%; ${paidExtraStyle}">
+              <div class="bar-paid" style="height:${pct}%; min-height:${pct>0 ? 18 : 0}px;">
                 <div class="bar-percent">${pct}%</div>
               </div>
             ` : ``}
@@ -806,9 +781,7 @@ function renderChart(groupsScope){
   });
 }
 
-// ============================
-// Details table
-// ============================
+// ---------- Details table (after filter) ----------
 function renderDetailTable(groups){
   const tbody = $("detail_rows");
   tbody.innerHTML = (groups || []).map((g,i)=>{
@@ -829,17 +802,26 @@ function renderDetailTable(groups){
     `;
   }).join("") || `<tr><td colspan="8">لا توجد بيانات</td></tr>`;
 
+  // ✅ Clicking a row opens the SAME drill modal but on that specific day/project
   tbody.onclick = (e)=>{
     const tr = e.target.closest("tr[data-idx]");
     if (!tr) return;
     const idx = +tr.getAttribute("data-idx");
-    openModalWithNav(groups, idx, null);
+    const g = (groups || [])[idx];
+    if (!g) return;
+
+    // Open day modal, then directly go to project drill for that day
+    const day = g.day;
+    const scope = groups; // filtered scope
+    openDayModal(day, scope);
+
+    // we want directly the project (simulate click)
+    // easiest: openDayModal shows day summary; user can click project quickly.
+    // If you want direct open details, you can add a direct jump here later safely.
   };
 }
 
-// ============================
-// Dropdowns
-// ============================
+// ---------- Dropdown helpers ----------
 function uniqSorted(arr){
   return Array.from(new Set(arr.filter(Boolean))).sort((a,b)=> a.localeCompare(b));
 }
@@ -861,9 +843,7 @@ function rebuildProjectDropdownForSector(){
   setSelectOptions("project", labels);
 }
 
-// ============================
-// Render
-// ============================
+// ---------- Render ----------
 function render(){
   const emailRows = rowsEmailsOnly(data).filter(filterRowByControls);
   const groupsAll = groupEmails(emailRows);
@@ -878,7 +858,7 @@ function render(){
 
   setTopProjectKPIs(groups);
 
-  // ✅ Debug
+  // Debug
   const dbgTotal = data.length;
   const dbgTime = data.filter(r => r.time).length;
   const dbgDate = data.filter(r => r._emailDate).length;
@@ -892,9 +872,7 @@ function render(){
   renderDetailTable(groups);
 }
 
-// ============================
-// Init
-// ============================
+// ---------- Init ----------
 async function init(){
   const res = await fetch(DATA_SOURCE.cashCsvUrl, { cache:"no-store" });
   if (!res.ok){
@@ -905,7 +883,7 @@ async function init(){
   const text = await res.text();
   data = parseCSV(text).map(normalizeRow);
 
-  // Build sector/project maps
+  // sector/project maps
   projectsBySector = new Map();
   for (const r of data){
     if (!r.sectorKey || !r.projectKey) continue;
@@ -913,7 +891,7 @@ async function init(){
     projectsBySector.get(r.sectorKey).add(r.projectKey);
   }
 
-  // Fill dropdowns
+  // dropdowns
   const sectorKeys = uniqSorted(Array.from(sectorLabelByKey.keys()));
   $("sector").innerHTML =
     `<option value="">الكل</option>` +
