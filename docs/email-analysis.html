@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=99">
+  <link rel="stylesheet" href="./assets/css/main.css?v=120">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -29,7 +29,7 @@
 
   <div class="container">
 
-    <!-- ✅ Topbar unified with Insights -->
+    <!-- ✅ Topbar -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
@@ -39,7 +39,7 @@
       <h1 class="page-title">E-Mails Analysis</h1>
     </div>
 
-    <!-- ✅ KPIs: 4 cards فقط -->
+    <!-- ✅ KPIs: 4 Cards فقط -->
     <div class="grid kpi" style="margin-top:12px;">
       <div class="card kpi-card">
         <div class="kpi-label">عدد الإيميلات</div>
@@ -59,16 +59,12 @@
         <div class="kpi-sub">إجمالي المصروف</div>
       </div>
 
+      <!-- ✅ كارت أعلى مشروع بالشكل اللي طلبته -->
       <div class="card kpi-card">
         <div class="kpi-label">أعلى مشروع</div>
 
-        <div class="kpi-sub" style="margin-top:6px;">بالعدد</div>
-        <div class="kpi-value" id="kpi_top_count_project" style="font-size:18px;">—</div>
-        <div class="kpi-sub" id="kpi_top_count_value">—</div>
-
-        <div class="kpi-sub" style="margin-top:10px;">بالقيمة (المصروف)</div>
-        <div class="kpi-value" id="kpi_top_paid_project" style="font-size:18px;">—</div>
-        <div class="kpi-sub" id="kpi_top_paid_value">—</div>
+        <div class="kpi-sub" id="kpi_top_count_line">عدد: —</div>
+        <div class="kpi-sub" id="kpi_top_value_line">قيمة: —</div>
       </div>
     </div>
 
@@ -86,7 +82,6 @@
             <select id="project"></select>
           </label>
 
-          <!-- ✅ Status values = 1/2/3 -->
           <label>الحالة:
             <select id="status">
               <option value="">الكل</option>
@@ -98,12 +93,12 @@
         </div>
 
         <div class="filter-row">
-          <label>من (ddmmyyyy أو dd/mm/yyyy):
-            <input id="date_from_txt" inputmode="numeric" placeholder="مثال: 12012025 أو 12/01/2025" />
+          <label>من:
+            <input id="date_from_txt" inputmode="numeric" placeholder="12012025 أو 12/01/2025" />
           </label>
 
-          <label>إلى (ddmmyyyy أو dd/mm/yyyy):
-            <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025 أو 31/01/2025" />
+          <label>إلى:
+            <input id="date_to_txt" inputmode="numeric" placeholder="31012025 أو 31/01/2025" />
           </label>
 
           <div class="btn-row">
@@ -111,7 +106,6 @@
           </div>
         </div>
 
-        <!-- ✅ meta + debug -->
         <div class="small"><span id="meta">—</span></div>
       </div>
     </div>
@@ -121,7 +115,7 @@
       <div class="card-title">آخر 15 يوم — إجمالي / مصروف + %</div>
       <div id="chart" class="chart"></div>
       <div class="small muted" style="margin-top:8px;">
-        اضغط على أي يوم: ملخص المشاريع → إيميلات المشروع → تفاصيل الإيميل
+        اضغط على أي يوم: ملخص المشاريع → (لو 1 إيميل يفتح التفاصيل مباشرة) / (لو أكثر يعرض ملخص الإيميلات ثم التفاصيل)
       </div>
     </div>
 
@@ -148,46 +142,8 @@
       </div>
     </div>
 
-    <!-- ✅ Email Modal (Prev/Next + Back + scroll) -->
-    <div id="emailModal" class="modal-backdrop" aria-hidden="true">
-      <div class="modal">
-        <div class="modal-head">
-          <div>
-            <div id="modalTitle" class="modal-title">—</div>
-            <div id="modalSub" class="modal-sub">—</div>
-          </div>
-
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button id="emailBack" class="nav-btn" style="display:none; opacity:.9;">↩ رجوع</button>
-            <button id="emailPrev" class="nav-btn" style="display:none; opacity:.9;">⟵ السابق</button>
-            <button id="emailNext" class="nav-btn" style="display:none; opacity:.9;">التالي ⟶</button>
-            <button id="modalClose" class="modal-close" aria-label="Close">✕</button>
-          </div>
-        </div>
-
-        <div class="modal-body">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>م</th>
-                  <th>الكود</th>
-                  <th>اسم المورد</th>
-                  <th>صافي القيمة</th>
-                  <th>المنصرف</th>
-                  <th>المتبقي</th>
-                </tr>
-              </thead>
-              <tbody id="modalRows"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
   </div>
 
-  <!-- PapaParse -->
   <script src="./assets/vendor/papaparse.min.js"></script>
   <script type="module" src="./src/email_analysis.js"></script>
 </body>
