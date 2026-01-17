@@ -33,6 +33,16 @@ function normText(x){
     .replace(/\s+/g, " ")
     .trim();
 }
+function tokenizeQuery(q){
+  const s = normText(q);
+  if (!s) return [];
+  return s.split(" ").map(t=>t.trim()).filter(Boolean);
+}
+function matchTokens(hay, tokens){
+  if (!tokens.length) return true;
+  const h = normText(hay);
+  return tokens.every(t => h.includes(t));
+}
 
 function parseDateSmart(txt){
   if (txt === null || txt === undefined) return null;
@@ -118,11 +128,19 @@ function statusOf(out, date, t0){
 let RAW = [];
 let GROUPS_ALL = [];
 
+// vendor index (for vendor filter multi-term against serial/code/vendor)
+const VENDOR_INDEX = new Map(); // vendorKey -> { vendor, code, serial }
+
 // All Vendors state
 let ALLV = [];
 let ALLV_FILTERED = [];
 let ALLV_PAGE = 1;
-const ALLV_PAGE_SIZE = 25;
+const ALLV_PAGE_SIZE = 20; // ✅ was 25, now 20
+
+// Details pagination state
+let DETAILS_SORTED = [];
+let DETAILS_PAGE = 1;
+const DETAILS_PAGE_SIZE = 20;
 
 function isScheduledPayable(r){
   return normText(r.request_id).includes(normText("مستحقات"));
@@ -279,15 +297,20 @@ function renderLinesModal(title, sub, lines, opts = {}){
 }
 
 function getFilters(){
-  const vendorTxt = $("vendor").value;
-  const statusTxt = $("status").value;
+  const vendorTxt = $("vendor").value; // ✅ multi-term search now
+  const statusTxt = $("status").value; // select
   const from = parseDateSmart($("date_from_txt").value);
   const to = parseDateSmart($("date_to_txt").value);
 
   const fromUTC = from ? new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(), 0,0,0)) : null;
   const toUTC = to ? new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate(), 23,59,59)) : null;
 
-  return { vKey: normText(vendorTxt), fromUTC, toUTC, status: statusTxt };
+  return {
+    vendorTokens: tokenizeQuery(vendorTxt),
+    fromUTC,
+    toUTC,
+    status: statusTxt
+  };
 }
 
 function inRange(d, fromUTC, toUTC){
@@ -297,12 +320,22 @@ function inRange(d, fromUTC, toUTC){
   return true;
 }
 
+function passesVendorTokens(vendorKey, tokens){
+  if (!tokens.length) return true;
+  const idx = VENDOR_INDEX.get(vendorKey);
+  const hay = idx ? `${idx.serial} ${idx.code} ${idx.vendor}` : vendorKey;
+  return matchTokens(hay, tokens);
+}
+
+// line-level (for popups)
 function filteredLines(){
-  const { vKey, fromUTC, toUTC, status } = getFilters();
+  const { vendorTokens, fromUTC, toUTC, status } = getFilters();
   const t0 = todayUTC0();
 
   return RAW.filter(r=>{
-    if (vKey && normText(r.vendor) !== vKey) return false;
+    const vKey = normText(r.vendor);
+    if (!passesVendorTokens(vKey, vendorTokens)) return false;
+
     if ((fromUTC || toUTC) && !inRange(r.date, fromUTC, toUTC)) return false;
 
     if (status){
@@ -313,12 +346,14 @@ function filteredLines(){
   });
 }
 
+// group-level (for KPIs + tables)
 function filteredGroups(){
-  const { vKey, fromUTC, toUTC, status } = getFilters();
+  const { vendorTokens, fromUTC, toUTC, status } = getFilters();
   const t0 = todayUTC0();
 
   return GROUPS_ALL.filter(g=>{
-    if (vKey && g.vendorKey !== vKey) return false;
+    if (!passesVendorTokens(g.vendorKey, vendorTokens)) return false;
+
     if ((fromUTC || toUTC) && !inRange(g.date, fromUTC, toUTC)) return false;
 
     if (status){
@@ -433,19 +468,39 @@ function renderTopVendors(groups){
   };
 }
 
-function renderTable(groups){
+function buildDetailsSorted(groups){
   const t0 = todayUTC0();
   const order = { "متأخر": 1, "قادم": 2, "مسدد": 3 };
 
-  const sorted = groups.slice().sort((a,b)=>{
+  return groups.slice().sort((a,b)=>{
     const sa = statusOf(a.out, a.date, t0);
     const sb = statusOf(b.out, b.date, t0);
 
     if (order[sa] !== order[sb]) return order[sa] - order[sb];
-    return a.date.getTime() - b.date.getTime(); // within group: date asc
-  });
 
-  $("rows").innerHTML = sorted.map(g=>{
+    // same status
+    // قادم: الأقرب -> الأبعد (date asc)
+    // متأخر/مسدد: الأقدم -> الأحدث (date asc)
+    return a.date.getTime() - b.date.getTime();
+  });
+}
+
+function renderDetailsTable(groups){
+  DETAILS_SORTED = buildDetailsSorted(groups);
+
+  const total = DETAILS_SORTED.length;
+  const pages = Math.max(1, Math.ceil(total / DETAILS_PAGE_SIZE));
+  DETAILS_PAGE = Math.max(1, Math.min(DETAILS_PAGE, pages));
+
+  const start = (DETAILS_PAGE - 1) * DETAILS_PAGE_SIZE;
+  const slice = DETAILS_SORTED.slice(start, start + DETAILS_PAGE_SIZE);
+
+  $("det_page_info").textContent = `Page ${DETAILS_PAGE} / ${pages} — Rows: ${total}`;
+  $("det_prev").disabled = (DETAILS_PAGE <= 1);
+  $("det_next").disabled = (DETAILS_PAGE >= pages);
+
+  const t0 = todayUTC0();
+  $("rows").innerHTML = slice.map(g=>{
     const st = statusOf(g.out, g.date, t0);
     const days = daysBetweenUTC(g.date, t0);
     const daysTxt = (st === "مسدد") ? "—" : (st === "متأخر" ? Math.abs(days) : days);
@@ -462,12 +517,14 @@ function renderTable(groups){
       </tr>
     `;
   }).join("") || `<tr><td colspan="7">لا توجد بيانات</td></tr>`;
+}
 
+function bindDetailsRowClick(){
   $("rows").onclick = (e)=>{
     const tr = e.target.closest("tr[data-key]");
     if (!tr) return;
     const key = tr.getAttribute("data-key");
-    const g = sorted.find(x=>x.key===key);
+    const g = DETAILS_SORTED.find(x=>x.key===key);
     if (!g) return;
 
     const lines = (g.lines || []).slice();
@@ -582,14 +639,16 @@ function buildAllVendorsFromRaw(rawRows){
   return Array.from(m.values()).sort((a,b)=> (b.out||0) - (a.out||0));
 }
 
+// ✅ Multi-term search (AND) for All Vendors
 function applyAllVendorsSearch(){
-  const q = normText($("all_search").value);
-  if (!q){
+  const tokens = tokenizeQuery($("all_search").value);
+
+  if (!tokens.length){
     ALLV_FILTERED = ALLV.slice();
   } else {
     ALLV_FILTERED = ALLV.filter(x=>{
-      const hay = normText(`${x.serial} ${x.code} ${x.vendor}`);
-      return hay.includes(q);
+      const hay = `${x.serial} ${x.code} ${x.vendor}`;
+      return matchTokens(hay, tokens);
     });
   }
   ALLV_PAGE = 1;
@@ -620,7 +679,6 @@ function renderAllVendors(){
     const lastDue  = x.maxDate ? dayLabel(x.maxDate) : "—";
     const serial = String(x.serial || "").trim(); // for click -> pdf
 
-    // صف clickable لو فيه مسلسل
     const cls = serial ? "clickable-row" : "";
     const hint = serial ? "اضغط لفتح PDF" : "";
 
@@ -647,16 +705,21 @@ function renderAllVendors(){
 /* -------------------------------------------------------------- */
 
 function wire(){
-  $("vendor").addEventListener("input", render);
-  $("status").addEventListener("input", render);
-  $("date_from_txt").addEventListener("input", render);
-  $("date_to_txt").addEventListener("input", render);
+  // vendor filter is now multi-term search => reset details page on change
+  $("vendor").addEventListener("input", ()=>{ DETAILS_PAGE = 1; render(); });
+
+  // status is select
+  $("status").addEventListener("change", ()=>{ DETAILS_PAGE = 1; render(); });
+
+  $("date_from_txt").addEventListener("input", ()=>{ DETAILS_PAGE = 1; render(); });
+  $("date_to_txt").addEventListener("input", ()=>{ DETAILS_PAGE = 1; render(); });
 
   $("clearFilters").addEventListener("click", ()=>{
     $("vendor").value = "";
     $("status").value = "";
     $("date_from_txt").value = "";
     $("date_to_txt").value = "";
+    DETAILS_PAGE = 1;
     render();
   });
 
@@ -681,7 +744,7 @@ function wire(){
     renderAllVendors();
   });
 
-  // ✅ Click on vendor row to open PDF
+  // Click on vendor row to open PDF
   $("all_vendors")?.addEventListener("click", (e)=>{
     const tr = e.target.closest("tr[data-serial]");
     if (!tr) return;
@@ -689,6 +752,18 @@ function wire(){
     if (!serial.trim()) return;
     openVendorPdfIfExists(serial);
   });
+
+  // Details pagination
+  $("det_prev")?.addEventListener("click", ()=>{
+    DETAILS_PAGE = Math.max(1, DETAILS_PAGE - 1);
+    render(); // re-render details slice only (safe)
+  });
+  $("det_next")?.addEventListener("click", ()=>{
+    DETAILS_PAGE = DETAILS_PAGE + 1;
+    render();
+  });
+
+  bindDetailsRowClick();
 }
 
 async function init(){
@@ -706,26 +781,36 @@ async function init(){
 
   GROUPS_ALL = group(RAW);
 
-  // Vendors datalist
-  const vendorList = Array.from(new Set(GROUPS_ALL.map(g=>g.vendor))).sort((a,b)=>a.localeCompare(b));
-  $("vendorsList").innerHTML = vendorList.map(v=>`<option value="${escHtml(v)}"></option>`).join("");
-
   // Build All Vendors (Unique) from RAW
   ALLV = buildAllVendorsFromRaw(RAW);
   ALLV_FILTERED = ALLV.slice();
   ALLV_PAGE = 1;
 
+  // Build vendor index for vendor filter multi-term
+  VENDOR_INDEX.clear();
+  for (const x of ALLV){
+    VENDOR_INDEX.set(x.vendorKey, { vendor: x.vendor, code: x.code || "", serial: x.serial || "" });
+  }
+
+  // Vendors datalist (optional convenience)
+  const vendorList = Array.from(new Set(GROUPS_ALL.map(g=>g.vendor))).sort((a,b)=>a.localeCompare(b));
+  $("vendorsList").innerHTML = vendorList.map(v=>`<option value="${escHtml(v)}"></option>`).join("");
+
   wire();
-  render();
   renderAllVendors();
+  render();
 }
 
 function render(){
   const shownGroups = filteredGroups();
+
   renderKPIs(shownGroups);
   renderBuckets(shownGroups);
   renderTopVendors(shownGroups);
-  renderTable(shownGroups);
+
+  // ✅ details table now paginated (20)
+  renderDetailsTable(shownGroups);
+
   renderMeta(GROUPS_ALL, shownGroups);
 }
 
