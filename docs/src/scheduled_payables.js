@@ -39,6 +39,7 @@ function parseDateSmart(txt){
   const s0 = String(txt).trim();
   if (!s0) return null;
 
+  // Excel serial
   if (/^\d+(\.\d+)?$/.test(s0)) {
     const num = Number(s0);
     if (num > 20000 && num < 80000) {
@@ -48,17 +49,20 @@ function parseDateSmart(txt){
     }
   }
 
+  // ISO
   if (/^\d{4}-\d{2}-\d{2}/.test(s0)){
     const d = new Date(s0);
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // DD/MM/YYYY or DD-MM-YYYY
   const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(s0);
   if (m){
     const d = new Date(Date.UTC(+m[3], +m[2]-1, +m[1]));
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // 8 digits: ddmmyyyy or yyyymmdd
   const digits = s0.replace(/\D/g, "");
   if (digits.length === 8){
     const yyyy = +digits.slice(0,4);
@@ -111,8 +115,8 @@ function statusOf(out, date, t0){
 }
 
 // ---------- State ----------
-let RAW = [];
-let GROUPS_ALL = [];
+let RAW = [];        // line-level (request_id contains "مستحقات")
+let GROUPS_ALL = []; // grouped vendor+date
 
 function isScheduledPayable(r){
   return normText(r.request_id).includes(normText("مستحقات"));
@@ -175,11 +179,6 @@ function group(rows){
   return Array.from(m.values());
 }
 
-function setSelectOptions(el, labels){
-  const uniq = Array.from(new Set(labels.filter(Boolean))).sort((a,b)=>a.localeCompare(b));
-  el.innerHTML = `<option value="">الكل</option>` + uniq.map(x=>`<option value="${escHtml(x)}">${escHtml(x)}</option>`).join("");
-}
-
 function openModal(){
   const m = $("spModal");
   m.classList.add("show");
@@ -200,17 +199,12 @@ function openModal(){
   document.addEventListener("keydown", onEsc);
 }
 
-/**
- * ✅ enforce 15 rows max (visual) via scroll is handled in CSS.
- * Here we only render rows; modal-body scroll will kick in automatically.
- */
 function renderLinesModal(title, sub, lines, opts = {}){
   const showVendorCol = !!opts.showVendor;
 
   $("spModalTitle").textContent = title;
   $("spModalSub").textContent = sub;
 
-  // ✅ Dynamic thead (cards popups include vendor; others stay as before)
   $("spModalThead").innerHTML = showVendorCol ? `
     <tr>
       <th>م</th>
@@ -270,16 +264,23 @@ function renderLinesModal(title, sub, lines, opts = {}){
 }
 
 function getFilters(){
-  const v = $("vendor").value;
+  const vendorTxt = $("vendor").value;
+  const statusTxt = $("status").value; // "", "مسدد", "متأخر", "قادم"
+
   const from = parseDateSmart($("date_from_txt").value);
   const to = parseDateSmart($("date_to_txt").value);
-  const status = $("status").value;
 
   const fromUTC = from ? new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(), 0,0,0)) : null;
   const toUTC = to ? new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate(), 23,59,59)) : null;
 
-  return { vKey: normText(v), fromUTC, toUTC, status };
+  return {
+    vKey: normText(vendorTxt),
+    fromUTC,
+    toUTC,
+    status: statusTxt
+  };
 }
+
 function inRange(d, fromUTC, toUTC){
   if (!(d instanceof Date) || isNaN(d.getTime())) return false;
   if (fromUTC && d.getTime() < fromUTC.getTime()) return false;
@@ -287,6 +288,7 @@ function inRange(d, fromUTC, toUTC){
   return true;
 }
 
+// line-level (for popups)
 function filteredLines(){
   const { vKey, fromUTC, toUTC, status } = getFilters();
   const t0 = todayUTC0();
@@ -303,6 +305,7 @@ function filteredLines(){
   });
 }
 
+// group-level (for main table + KPIs)
 function filteredGroups(){
   const { vKey, fromUTC, toUTC, status } = getFilters();
   const t0 = todayUTC0();
@@ -414,7 +417,9 @@ function renderTopVendors(groups){
         if (st !== status) return false;
       }
       return r.out > 0;
-    }).sort((a,b)=> (b.out||0)-(a.out||0));
+    })
+    // ✅ ترتيب Popup Top5: الأقدم -> الأحدث
+    .sort((a,b)=> a.date.getTime() - b.date.getTime());
 
     const outSum = lines.reduce((a,r)=>a+r.out,0);
     const paidSum = lines.reduce((a,r)=>a+r.paid,0);
@@ -424,7 +429,7 @@ function renderTopVendors(groups){
       `تفاصيل Vendor: ${lines[0]?.vendor || "—"}`,
       `القيمة: ${fmtMoney(valSum)} | المنصرف: ${fmtMoney(paidSum)} | المتبقي: ${fmtMoney(outSum)} | عدد البنود: ${lines.length}`,
       lines,
-      { showVendor: false } // ✅ لم نغيّر ده (المطلوب للـ 8 كروت فقط)
+      { showVendor: false }
     );
   };
 }
@@ -432,11 +437,23 @@ function renderTopVendors(groups){
 function renderTable(groups){
   const t0 = todayUTC0();
 
+  // ✅ Exceptional sorting:
+  // 1) متأخر: الأقدم -> الأحدث
+  // 2) قادم: الأقرب -> الأبعد
+  // 3) مسدد: في الآخر الأقدم -> الأحدث
+  const order = { "متأخر": 1, "قادم": 2, "مسدد": 3 };
+
   const sorted = groups.slice().sort((a,b)=>{
-    const ad = a.date?.getTime() || 0;
-    const bd = b.date?.getTime() || 0;
-    if (ad !== bd) return ad - bd;
-    return (b.out||0) - (a.out||0);
+    const sa = statusOf(a.out, a.date, t0);
+    const sb = statusOf(b.out, b.date, t0);
+
+    if (order[sa] !== order[sb]) return order[sa] - order[sb];
+
+    // same status
+    if (sa === "قادم"){
+      return a.date.getTime() - b.date.getTime(); // الأقرب للأبعد
+    }
+    return a.date.getTime() - b.date.getTime();   // متأخر أو مسدد: الأقدم للأحدث
   });
 
   $("rows").innerHTML = sorted.map(g=>{
@@ -457,6 +474,7 @@ function renderTable(groups){
     `;
   }).join("") || `<tr><td colspan="7">لا توجد بيانات</td></tr>`;
 
+  // Popup from table remains same (details lines) – لم نغيره إلا لو طلبت
   $("rows").onclick = (e)=>{
     const tr = e.target.closest("tr[data-key]");
     if (!tr) return;
@@ -464,7 +482,7 @@ function renderTable(groups){
     const g = sorted.find(x=>x.key===key);
     if (!g) return;
 
-    const lines = (g.lines || []).slice().sort((a,b)=> (b.out||0)-(a.out||0));
+    const lines = (g.lines || []).slice();
     const valSum = lines.reduce((a,r)=>a+r.value,0);
     const paidSum = lines.reduce((a,r)=>a+r.paid,0);
     const outSum = lines.reduce((a,r)=>a+r.out,0);
@@ -473,17 +491,18 @@ function renderTable(groups){
       `${g.vendor} — ${g.dateLabel}`,
       `القيمة: ${fmtMoney(valSum)} | المنصرف: ${fmtMoney(paidSum)} | المتبقي: ${fmtMoney(outSum)} | عدد البنود: ${lines.length}`,
       lines,
-      { showVendor: false } // ✅ unchanged
+      { showVendor: false }
     );
   };
 }
 
 function renderMeta(allGroups, shownGroups){
-  $("meta").textContent =
-    `المعروض: ${shownGroups.length} من ${allGroups.length} | Vendor: ${$("vendor").selectedOptions[0]?.textContent || "الكل"} | حالة: ${$("status").selectedOptions[0]?.textContent || "الكل"}`;
+  const vendorTxt = $("vendor").value || "الكل";
+  const statusTxt = $("status").value || "الكل";
+  $("meta").textContent = `المعروض: ${shownGroups.length} من ${allGroups.length} | Vendor: ${vendorTxt} | حالة: ${statusTxt}`;
 }
 
-// ✅ Popups for the 8 cards ONLY (show vendor column)
+// ✅ Popups for 8 cards ONLY (sorted by date oldest->newest)
 function popupFor(type){
   const t0 = todayUTC0();
   const lines = filteredLines();
@@ -522,7 +541,8 @@ function popupFor(type){
     return;
   }
 
-  filtered.sort((a,b)=> (b.out||0)-(a.out||0));
+  // ✅ ترتيب Popup الـ 8 كروت: الأقدم -> الأحدث
+  filtered.sort((a,b)=> a.date.getTime() - b.date.getTime());
 
   const valSum = filtered.reduce((a,r)=>a+r.value,0);
   const paidSum = filtered.reduce((a,r)=>a+r.paid,0);
@@ -532,16 +552,27 @@ function popupFor(type){
     title,
     `القيمة: ${fmtMoney(valSum)} | المنصرف: ${fmtMoney(paidSum)} | المتبقي: ${fmtMoney(outSum)} | عدد البنود: ${filtered.length}`,
     filtered,
-    { showVendor: true } // ✅ هنا فقط نضيف عمود اسم المورد
+    { showVendor: true } // ✅ للـ 8 كروت فقط
   );
 }
 
 function wire(){
-  $("vendor").addEventListener("change", render);
-  $("status").addEventListener("change", render);
+  // inputs (datalist) triggers
+  $("vendor").addEventListener("input", render);
+  $("status").addEventListener("input", render);
   $("date_from_txt").addEventListener("input", render);
   $("date_to_txt").addEventListener("input", render);
 
+  // Clear filters
+  $("clearFilters").addEventListener("click", ()=>{
+    $("vendor").value = "";
+    $("status").value = "";
+    $("date_from_txt").value = "";
+    $("date_to_txt").value = "";
+    render();
+  });
+
+  // 8 cards click
   document.querySelectorAll("[data-popup]").forEach(el=>{
     el.addEventListener("click", ()=>{
       const type = el.getAttribute("data-popup");
@@ -561,8 +592,9 @@ async function init(){
   RAW = parseCSV(text).map(mapRow).filter(isScheduledPayable);
   GROUPS_ALL = group(RAW);
 
+  // Vendors datalist
   const vendorList = Array.from(new Set(GROUPS_ALL.map(g=>g.vendor))).sort((a,b)=>a.localeCompare(b));
-  setSelectOptions($("vendor"), vendorList);
+  $("vendorsList").innerHTML = vendorList.map(v=>`<option value="${escHtml(v)}"></option>`).join("");
 
   wire();
   render();
