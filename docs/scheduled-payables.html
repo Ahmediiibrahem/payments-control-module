@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=44">
+  <link rel="stylesheet" href="./assets/css/main.css?v=45">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -36,6 +36,11 @@
     /* ✅ Popup: max-height + scroll (approx ~15 rows depending on screen) */
     #spModal .modal{width:min(1150px,96vw); max-height:78vh;}
     #spModal .modal-body{overflow:auto; max-height:62vh;}
+
+    /* All Vendors controls */
+    .mini-controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .mini-controls input{min-width:260px}
+    .pager{display:flex; gap:8px; align-items:center}
   </style>
 </head>
 
@@ -47,7 +52,7 @@
 
   <div class="container">
 
-    <!-- ✅ NAV (بنفس الترتيب اللي انت كتبه) -->
+    <!-- ✅ NAV -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
@@ -126,13 +131,11 @@
       <div class="filters" style="margin-top:8px;">
         <div class="filter-row">
 
-          <!-- ✅ Vendor searchable validation list -->
           <label>المورد/المقاول:
             <input id="vendor" list="vendorsList" placeholder="اكتب للبحث أو افتح القائمة" />
             <datalist id="vendorsList"></datalist>
           </label>
 
-          <!-- ✅ Status searchable validation list -->
           <label>الحالة:
             <input id="status" list="statusList" placeholder="اكتب للبحث أو افتح القائمة" />
             <datalist id="statusList">
@@ -151,11 +154,9 @@
             <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025" />
           </label>
 
-          <!-- ✅ Clear Filters -->
           <div class="btn-row" style="align-self:flex-end;">
             <button id="clearFilters">Clear</button>
           </div>
-
         </div>
 
         <div class="small"><span id="meta">—</span></div>
@@ -179,6 +180,43 @@
         </table>
       </div>
       <div class="small" style="margin-top:8px;">اضغط على أي Vendor لعرض تفاصيل بنوده.</div>
+    </div>
+
+    <!-- ✅ All Vendors (Unique) -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">All Vendors (Unique)</div>
+
+      <div class="mini-controls" style="margin-top:10px;">
+        <input id="all_search" placeholder="بحث داخل كل الموردين (اسم/كود/مسلسل)..." />
+        <div class="pager">
+          <button id="all_prev">Prev</button>
+          <span class="small" id="all_page_info">—</span>
+          <button id="all_next">Next</button>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>م</th>
+              <th>الكود</th>
+              <th>اسم المورد/المقاول</th>
+              <th>إجمالي المستحقات</th>
+              <th>المصروف</th>
+              <th>المتبقي</th>
+              <th>أول استحقاق</th>
+              <th>آخر استحقاق</th>
+              <th>PDF</th>
+            </tr>
+          </thead>
+          <tbody id="all_vendors"></tbody>
+        </table>
+      </div>
+
+      <div class="small" style="margin-top:8px;">
+        ملاحظة: زر PDF يفتح الملف من <code>./assets/pdf/[مسلسل].pdf</code> (عند وجود مسلسل المستحقات).
+      </div>
     </div>
 
     <!-- Main Table -->
