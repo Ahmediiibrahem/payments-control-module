@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=42">
+  <link rel="stylesheet" href="./assets/css/main.css?v=43">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -32,6 +32,10 @@
 
     .clickable-row{cursor:pointer}
     .clickable-row:hover{filter:brightness(1.06)}
+
+    /* ✅ Popup: max 15 rows + scroll (applies to ALL popups) */
+    #spModal .modal{width:min(1100px,96vw); max-height:78vh;}
+    #spModal .modal-body{overflow:auto; max-height:62vh;}
   </style>
 </head>
 
@@ -43,7 +47,7 @@
 
   <div class="container">
 
-    <!-- ✅ NAV (بنفس الترتيب اللي انت كاتبه) -->
+    <!-- ✅ NAV (بنفس الترتيب) -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
@@ -202,17 +206,7 @@
         <div class="modal-body">
           <div class="table-wrap">
             <table>
-              <thead id="spModalThead">
-                <tr>
-                  <th>م</th>
-                  <th>الكود</th>
-                  <th>الوصف</th>
-                  <th>تاريخ الاستحقاق</th>
-                  <th>القيمة</th>
-                  <th>المنصرف</th>
-                  <th>المتبقي</th>
-                </tr>
-              </thead>
+              <thead id="spModalThead"></thead>
               <tbody id="spModalRows"></tbody>
             </table>
           </div>
