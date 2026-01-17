@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=38">
+  <link rel="stylesheet" href="./assets/css/main.css?v=42">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -25,7 +25,13 @@
     @media(max-width:900px){.grid.kpi{grid-template-columns:repeat(2,1fr)}}
     .grid.buckets{grid-template-columns:repeat(4,1fr)}
     @media(max-width:900px){.grid.buckets{grid-template-columns:repeat(2,1fr)}}
+
     .card-title{font-weight:800}
+    .kpi-sub.clickable{cursor:pointer;text-decoration:underline;opacity:.9}
+    .kpi-sub.clickable:hover{opacity:1}
+
+    .clickable-row{cursor:pointer}
+    .clickable-row:hover{filter:brightness(1.06)}
   </style>
 </head>
 
@@ -37,13 +43,13 @@
 
   <div class="container">
 
+    <!-- ✅ NAV (بنفس الترتيب اللي انت كاتبه) -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
         <a class="nav-btn" href="./email-analysis.html">E-Mails Analysis</a>
         <a class="nav-btn" href="./insights.html">Executive Insights</a>
         <a class="nav-btn" href="./scheduled-payables.html">Scheduled Payables</a>
-        
       </div>
       <h1 class="page-title">Scheduled Payables (Cash Out Plan)</h1>
     </div>
@@ -53,54 +59,61 @@
       <div class="card kpi-card">
         <div class="kpi-label">إجمالي المستحقات (Gross)</div>
         <div class="kpi-value" id="kpi_gross">—</div>
-        <div class="kpi-sub" id="kpi_gross_cnt">—</div>
+        <div class="kpi-sub clickable" id="kpi_gross_cnt" data-popup="gross">—</div>
       </div>
 
       <div class="card kpi-card">
         <div class="kpi-label">المسدد (Paid)</div>
         <div class="kpi-value" id="kpi_paid">—</div>
-        <div class="kpi-sub" id="kpi_paid_cnt">—</div>
+        <div class="kpi-sub clickable" id="kpi_paid_cnt" data-popup="paid">—</div>
       </div>
 
       <div class="card kpi-card">
         <div class="kpi-label">المتبقي (Outstanding)</div>
         <div class="kpi-value" id="kpi_out">—</div>
-        <div class="kpi-sub" id="kpi_out_cnt">—</div>
+        <div class="kpi-sub clickable" id="kpi_out_cnt" data-popup="out">—</div>
       </div>
 
       <div class="card kpi-card">
         <div class="kpi-label">مستحق ومتأخر (Overdue)</div>
         <div class="kpi-value" id="kpi_overdue">—</div>
-        <div class="kpi-sub" id="kpi_overdue_cnt">—</div>
+        <div class="kpi-sub clickable" id="kpi_overdue_cnt" data-popup="overdue">—</div>
       </div>
     </div>
 
     <!-- Buckets -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">القادم حسب المدة (بناءً على source_request_date)</div>
+
       <div class="grid buckets" style="margin-top:10px;">
         <div class="card kpi-card">
           <div class="kpi-label">خلال 7 أيام</div>
           <div class="kpi-value" id="b7_amt">—</div>
-          <div class="kpi-sub" id="b7_cnt">—</div>
+          <div class="kpi-sub clickable" id="b7_cnt" data-popup="b7">—</div>
         </div>
+
         <div class="card kpi-card">
           <div class="kpi-label">خلال 14 يوم</div>
           <div class="kpi-value" id="b14_amt">—</div>
-          <div class="kpi-sub" id="b14_cnt">—</div>
+          <div class="kpi-sub clickable" id="b14_cnt" data-popup="b14">—</div>
         </div>
+
         <div class="card kpi-card">
           <div class="kpi-label">خلال 30 يوم</div>
           <div class="kpi-value" id="b30_amt">—</div>
-          <div class="kpi-sub" id="b30_cnt">—</div>
+          <div class="kpi-sub clickable" id="b30_cnt" data-popup="b30">—</div>
         </div>
+
         <div class="card kpi-card">
           <div class="kpi-label">بعد 30 يوم</div>
           <div class="kpi-value" id="b30p_amt">—</div>
-          <div class="kpi-sub" id="b30p_cnt">—</div>
+          <div class="kpi-sub clickable" id="b30p_cnt" data-popup="b30p">—</div>
         </div>
       </div>
-      <div class="small" style="margin-top:8px;">ملاحظة: البنود المتأخرة تظهر في كارت Overdue بالأعلى، ولا تدخل ضمن Buckets القادمة.</div>
+
+      <div class="small" style="margin-top:8px;">
+        ملاحظة: البنود المتأخرة تظهر في كارت Overdue بالأعلى، ولا تدخل ضمن Buckets القادمة.
+      </div>
     </div>
 
     <!-- Filters -->
@@ -112,6 +125,15 @@
             <select id="vendor"></select>
           </label>
 
+          <label>الحالة:
+            <select id="status">
+              <option value="">الكل</option>
+              <option value="مسدد">مسدد</option>
+              <option value="متأخر">متأخر</option>
+              <option value="قادم">قادم</option>
+            </select>
+          </label>
+
           <label>من (ddmmyyyy):
             <input id="date_from_txt" inputmode="numeric" placeholder="مثال: 12012025" />
           </label>
@@ -119,18 +141,6 @@
           <label>إلى (ddmmyyyy):
             <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025" />
           </label>
-
-          <label style="align-self:flex-end;">
-            <span style="display:flex;gap:8px;align-items:center;">
-              <input id="show_settled" type="checkbox" />
-              إظهار البنود المسددة بالكامل
-            </span>
-          </label>
-
-          <div class="btn-row" style="align-self:flex-end;">
-            <button id="clearBtn">مسح</button>
-            <button id="exportBtn">تصدير CSV</button>
-          </div>
         </div>
 
         <div class="small"><span id="meta">—</span></div>
@@ -153,6 +163,7 @@
           <tbody id="top_vendors"></tbody>
         </table>
       </div>
+      <div class="small" style="margin-top:8px;">اضغط على أي Vendor لعرض تفاصيل بنوده.</div>
     </div>
 
     <!-- Main Table -->
@@ -162,7 +173,7 @@
         <table>
           <thead>
             <tr>
-              <th>التاريخ</th>
+              <th>تاريخ الاستحقاق</th>
               <th>المورد/المقاول</th>
               <th>Gross</th>
               <th>Paid</th>
@@ -174,7 +185,7 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <div class="small" style="margin-top:8px;">اضغط على أي صف لعرض تفاصيل السطور (المقاول + تأمين الأعمال.. إلخ).</div>
+      <div class="small" style="margin-top:8px;">اضغط على أي صف لعرض تفاصيل البنود (Code/Description).</div>
     </div>
 
     <!-- Modal -->
@@ -191,11 +202,12 @@
         <div class="modal-body">
           <div class="table-wrap">
             <table>
-              <thead>
+              <thead id="spModalThead">
                 <tr>
                   <th>م</th>
                   <th>الكود</th>
-                  <th>بند الحسابات</th>
+                  <th>الوصف</th>
+                  <th>تاريخ الاستحقاق</th>
                   <th>القيمة</th>
                   <th>المنصرف</th>
                   <th>المتبقي</th>
