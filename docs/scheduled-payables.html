@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=45">
+  <link rel="stylesheet" href="./assets/css/main.css?v=46">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -41,6 +41,18 @@
     .mini-controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
     .mini-controls input{min-width:260px}
     .pager{display:flex; gap:8px; align-items:center}
+
+    /* ✅ Vendor Unique table sizing + wrap vendor name */
+    .allv-table{table-layout:fixed;}
+    .allv-table th, .allv-table td{vertical-align:top;}
+    .allv-col-code{width:90px}
+    .allv-col-vendor{width:240px; white-space:normal; word-break:break-word; overflow-wrap:anywhere;}
+    .allv-col-date{width:120px}
+    .allv-col-money{width:130px}
+
+    @media(max-width:900px){
+      .allv-col-vendor{width:180px;}
+    }
   </style>
 </head>
 
@@ -52,7 +64,7 @@
 
   <div class="container">
 
-    <!-- ✅ NAV -->
+    <!-- ✅ NAV + Title -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
@@ -63,7 +75,7 @@
       <h1 class="page-title">Scheduled Payables (Cash Out Plan)</h1>
     </div>
 
-    <!-- KPIs -->
+    <!-- ✅ 8 Cards -->
     <div class="grid kpi">
       <div class="card kpi-card">
         <div class="kpi-label">إجمالي المستحقات (Gross)</div>
@@ -90,7 +102,6 @@
       </div>
     </div>
 
-    <!-- Buckets -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">القادم حسب المدة (بناءً على source_request_date)</div>
 
@@ -125,7 +136,43 @@
       </div>
     </div>
 
-    <!-- Filters -->
+    <!-- ✅ Vendors Unique (Moved هنا فوق الفلاتر) -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">All Vendors (Unique)</div>
+
+      <div class="mini-controls" style="margin-top:10px;">
+        <input id="all_search" placeholder="بحث داخل كل الموردين (اسم/كود/مسلسل)..." />
+        <div class="pager">
+          <button id="all_prev">Prev</button>
+          <span class="small" id="all_page_info">—</span>
+          <button id="all_next">Next</button>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:10px;">
+        <table class="allv-table">
+          <thead>
+            <tr>
+              <th style="width:55px">م</th>
+              <th class="allv-col-code">الكود</th>
+              <th class="allv-col-vendor">اسم المورد/المقاول</th>
+              <th class="allv-col-money">الإجمالي</th>
+              <th class="allv-col-money">المصروف</th>
+              <th class="allv-col-money">المتبقي</th>
+              <th class="allv-col-date">أول استحقاق</th>
+              <th class="allv-col-date">آخر استحقاق</th>
+            </tr>
+          </thead>
+          <tbody id="all_vendors"></tbody>
+        </table>
+      </div>
+
+      <div class="small" style="margin-top:8px;">
+        اضغط على صف المورد لفتح ملف الـ PDF (إذا كان مسلسل المستحقات موجودًا) من <code>./assets/pdf/[مسلسل].pdf</code>.
+      </div>
+    </div>
+
+    <!-- ✅ Filters (بعد Vendors Unique) -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">الفلاتر</div>
       <div class="filters" style="margin-top:8px;">
@@ -163,7 +210,7 @@
       </div>
     </div>
 
-    <!-- Top 5 Vendors -->
+    <!-- ✅ Top 5 Vendors -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">Top 5 Vendors (Outstanding)</div>
       <div class="table-wrap" style="margin-top:10px;">
@@ -182,44 +229,7 @@
       <div class="small" style="margin-top:8px;">اضغط على أي Vendor لعرض تفاصيل بنوده.</div>
     </div>
 
-    <!-- ✅ All Vendors (Unique) -->
-    <div class="card" style="margin-top:12px;">
-      <div class="card-title">All Vendors (Unique)</div>
-
-      <div class="mini-controls" style="margin-top:10px;">
-        <input id="all_search" placeholder="بحث داخل كل الموردين (اسم/كود/مسلسل)..." />
-        <div class="pager">
-          <button id="all_prev">Prev</button>
-          <span class="small" id="all_page_info">—</span>
-          <button id="all_next">Next</button>
-        </div>
-      </div>
-
-      <div class="table-wrap" style="margin-top:10px;">
-        <table>
-          <thead>
-            <tr>
-              <th>م</th>
-              <th>الكود</th>
-              <th>اسم المورد/المقاول</th>
-              <th>إجمالي المستحقات</th>
-              <th>المصروف</th>
-              <th>المتبقي</th>
-              <th>أول استحقاق</th>
-              <th>آخر استحقاق</th>
-              <th>PDF</th>
-            </tr>
-          </thead>
-          <tbody id="all_vendors"></tbody>
-        </table>
-      </div>
-
-      <div class="small" style="margin-top:8px;">
-        ملاحظة: زر PDF يفتح الملف من <code>./assets/pdf/[مسلسل].pdf</code> (عند وجود مسلسل المستحقات).
-      </div>
-    </div>
-
-    <!-- Main Table -->
+    <!-- ✅ Vendors all details (آخر جزء) -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">تفاصيل المستحقات (مجمعة Vendor + Date)</div>
       <div class="table-wrap" style="margin-top:10px;">
