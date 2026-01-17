@@ -115,11 +115,11 @@ function statusOf(out, date, t0){
 }
 
 // ---------- State ----------
-let RAW = [];        // line-level (request_id contains "مستحقات")
-let GROUPS_ALL = []; // grouped vendor+date
+let RAW = [];
+let GROUPS_ALL = [];
 
 // All Vendors state
-let ALLV = [];       // unique vendors aggregated
+let ALLV = [];
 let ALLV_FILTERED = [];
 let ALLV_PAGE = 1;
 const ALLV_PAGE_SIZE = 25;
@@ -129,7 +129,6 @@ function isScheduledPayable(r){
 }
 
 function mapRow(raw){
-  // map headers with schema map
   const mapped = {};
   for (const [k, v] of Object.entries(raw || {})){
     const kk = normalizeHeaderKey(k);
@@ -143,8 +142,7 @@ function mapRow(raw){
   const code = String(mapped.code ?? "").trim();
   const description = String(mapped.Description ?? mapped.description ?? "").trim();
 
-  // ✅ مسلسل المستحقات (العمود الجديد)
-  // نحاول بأكثر من اسم محتمل
+  // مسلسل المستحقات
   const serialRaw =
     mapped["مسلسل_المستحقات"] ??
     mapped["مسلسل المستحقات"] ??
@@ -167,7 +165,6 @@ function mapRow(raw){
   return { request_id, vendor, code, description, serial, date: d, value, paid, out };
 }
 
-// Group by Vendor + Date
 function group(rows){
   const m = new Map();
   for (const r of rows){
@@ -283,7 +280,7 @@ function renderLinesModal(title, sub, lines, opts = {}){
 
 function getFilters(){
   const vendorTxt = $("vendor").value;
-  const statusTxt = $("status").value; // "", "مسدد", "متأخر", "قادم"
+  const statusTxt = $("status").value;
   const from = parseDateSmart($("date_from_txt").value);
   const to = parseDateSmart($("date_to_txt").value);
 
@@ -300,7 +297,6 @@ function inRange(d, fromUTC, toUTC){
   return true;
 }
 
-// line-level (for popups)
 function filteredLines(){
   const { vKey, fromUTC, toUTC, status } = getFilters();
   const t0 = todayUTC0();
@@ -317,7 +313,6 @@ function filteredLines(){
   });
 }
 
-// group-level (for KPIs + tables)
 function filteredGroups(){
   const { vKey, fromUTC, toUTC, status } = getFilters();
   const t0 = todayUTC0();
@@ -423,9 +418,7 @@ function renderTopVendors(groups){
         if (st !== status) return false;
       }
       return r.out > 0;
-    })
-    // ✅ Popup Top5: oldest -> newest
-    .sort((a,b)=> a.date.getTime() - b.date.getTime());
+    }).sort((a,b)=> a.date.getTime() - b.date.getTime()); // oldest -> newest
 
     const outSum = lines.reduce((a,r)=>a+r.out,0);
     const paidSum = lines.reduce((a,r)=>a+r.paid,0);
@@ -449,11 +442,7 @@ function renderTable(groups){
     const sb = statusOf(b.out, b.date, t0);
 
     if (order[sa] !== order[sb]) return order[sa] - order[sb];
-
-    // same status
-    // قادم: الأقرب -> الأبعد
-    // متأخر/مسدد: الأقدم -> الأحدث
-    return a.date.getTime() - b.date.getTime();
+    return a.date.getTime() - b.date.getTime(); // within group: date asc
   });
 
   $("rows").innerHTML = sorted.map(g=>{
@@ -501,7 +490,7 @@ function renderMeta(allGroups, shownGroups){
   $("meta").textContent = `المعروض: ${shownGroups.length} من ${allGroups.length} | Vendor: ${vendorTxt} | حالة: ${statusTxt}`;
 }
 
-// ✅ Popups for 8 cards ONLY (oldest -> newest)
+// Popups for 8 cards only (oldest -> newest)
 function popupFor(type){
   const t0 = todayUTC0();
   const lines = filteredLines();
@@ -568,9 +557,7 @@ function buildAllVendorsFromRaw(rawRows){
       m.set(k, {
         vendor: r.vendor,
         vendorKey: k,
-        // "الكود" (لو عندك Vendor code فعليًا يبقى هنغيره بعدين)
         code: r.code || "",
-        // مسلسل المستحقات
         serial: r.serial || "",
         gross: 0,
         paid: 0,
@@ -581,7 +568,6 @@ function buildAllVendorsFromRaw(rawRows){
     }
     const x = m.get(k);
 
-    // أفضل كود/مسلسل لو ظهروا لاحقًا
     if (!x.code && r.code) x.code = r.code;
     if (!x.serial && r.serial) x.serial = r.serial;
 
@@ -593,7 +579,6 @@ function buildAllVendorsFromRaw(rawRows){
     if (r.date.getTime() > x.maxDate.getTime()) x.maxDate = r.date;
   }
 
-  // sort by outstanding desc (executive friendly)
   return Array.from(m.values()).sort((a,b)=> (b.out||0) - (a.out||0));
 }
 
@@ -610,6 +595,13 @@ function applyAllVendorsSearch(){
   ALLV_PAGE = 1;
 }
 
+function openVendorPdfIfExists(serial){
+  const s = String(serial || "").trim();
+  if (!s) return;
+  const href = `./assets/pdf/${encodeURIComponent(s)}.pdf`;
+  window.open(href, "_blank", "noopener");
+}
+
 function renderAllVendors(){
   if (!$("all_vendors")) return;
 
@@ -624,19 +616,16 @@ function renderAllVendors(){
 
   const rows = slice.map((x, idx)=>{
     const n = start + idx + 1;
-
     const firstDue = x.minDate ? dayLabel(x.minDate) : "—";
     const lastDue  = x.maxDate ? dayLabel(x.maxDate) : "—";
+    const serial = String(x.serial || "").trim(); // for click -> pdf
 
-    // ✅ PDF link based on serial
-    const hasSerial = String(x.serial || "").trim() !== "";
-    const pdfHref = hasSerial ? `./assets/pdf/${encodeURIComponent(String(x.serial).trim())}.pdf` : "";
-    const pdfCell = hasSerial
-      ? `<a href="${pdfHref}" target="_blank" rel="noopener">PDF</a>`
-      : `—`;
+    // صف clickable لو فيه مسلسل
+    const cls = serial ? "clickable-row" : "";
+    const hint = serial ? "اضغط لفتح PDF" : "";
 
     return `
-      <tr>
+      <tr class="${cls}" data-serial="${escHtml(serial)}" title="${escHtml(hint)}">
         <td>${n}</td>
         <td>${escHtml(x.code || "—")}</td>
         <td>${escHtml(x.vendor)}</td>
@@ -645,10 +634,9 @@ function renderAllVendors(){
         <td>${fmtMoney(x.out)}</td>
         <td>${firstDue}</td>
         <td>${lastDue}</td>
-        <td>${pdfCell}</td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="9">لا توجد بيانات</td></tr>`;
+  }).join("") || `<tr><td colspan="8">لا توجد بيانات</td></tr>`;
 
   $("all_vendors").innerHTML = rows;
 
@@ -692,6 +680,15 @@ function wire(){
     ALLV_PAGE = ALLV_PAGE + 1;
     renderAllVendors();
   });
+
+  // ✅ Click on vendor row to open PDF
+  $("all_vendors")?.addEventListener("click", (e)=>{
+    const tr = e.target.closest("tr[data-serial]");
+    if (!tr) return;
+    const serial = tr.getAttribute("data-serial") || "";
+    if (!serial.trim()) return;
+    openVendorPdfIfExists(serial);
+  });
 }
 
 async function init(){
@@ -713,7 +710,7 @@ async function init(){
   const vendorList = Array.from(new Set(GROUPS_ALL.map(g=>g.vendor))).sort((a,b)=>a.localeCompare(b));
   $("vendorsList").innerHTML = vendorList.map(v=>`<option value="${escHtml(v)}"></option>`).join("");
 
-  // ✅ Build All Vendors (Unique) from RAW
+  // Build All Vendors (Unique) from RAW
   ALLV = buildAllVendorsFromRaw(RAW);
   ALLV_FILTERED = ALLV.slice();
   ALLV_PAGE = 1;
