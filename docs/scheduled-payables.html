@@ -65,6 +65,63 @@
       min-width: 180px;
       font-family: inherit;
     }
+    /* =========================
+   Filters: unified styling
+========================= */
+.filters .filter-row input,
+.filters .filter-row select,
+.filters .filter-row button{
+  height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.filters .filter-row button{
+  background: rgba(255,255,255,0.10);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.filters .filter-row button:hover{
+  filter: brightness(1.08);
+}
+
+    /* =========================
+   All Vendors (Unique) table fixes
+========================= */
+
+/* enforce fixed layout + prevent overlap */
+.allv-table{ table-layout: fixed; width: 100%; }
+.allv-table th, .allv-table td{ overflow: hidden; }
+
+/* vendor column: wrap hard */
+.allv-table td:nth-child(3),
+.allv-table th:nth-child(3){
+  white-space: normal !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+/* money columns (Gross/Paid/Out): equal & smaller */
+.allv-table td:nth-child(4),
+.allv-table th:nth-child(4),
+.allv-table td:nth-child(5),
+.allv-table th:nth-child(5),
+.allv-table td:nth-child(6),
+.allv-table th:nth-child(6){
+  width: 110px !important;     /* أصغر ومتساوي */
+  text-align: center;
+}
+
+
+    
   </style>
 </head>
 
