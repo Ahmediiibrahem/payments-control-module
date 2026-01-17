@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=46">
+  <link rel="stylesheet" href="./assets/css/main.css?v=47">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -37,7 +37,7 @@
     #spModal .modal{width:min(1150px,96vw); max-height:78vh;}
     #spModal .modal-body{overflow:auto; max-height:62vh;}
 
-    /* All Vendors controls */
+    /* Controls */
     .mini-controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
     .mini-controls input{min-width:260px}
     .pager{display:flex; gap:8px; align-items:center}
@@ -52,6 +52,18 @@
 
     @media(max-width:900px){
       .allv-col-vendor{width:180px;}
+    }
+
+    /* make status select look consistent */
+    .filter-row select{
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      color: inherit;
+      outline: none;
+      min-width: 180px;
+      font-family: inherit;
     }
   </style>
 </head>
@@ -136,12 +148,12 @@
       </div>
     </div>
 
-    <!-- ✅ Vendors Unique (Moved هنا فوق الفلاتر) -->
+    <!-- ✅ Vendors Unique -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">All Vendors (Unique)</div>
 
       <div class="mini-controls" style="margin-top:10px;">
-        <input id="all_search" placeholder="بحث داخل كل الموردين (اسم/كود/مسلسل)..." />
+        <input id="all_search" placeholder="بحث (جزء من مسلسل/كود/اسم)... مثال: 12 كهرباء" />
         <div class="pager">
           <button id="all_prev">Prev</button>
           <span class="small" id="all_page_info">—</span>
@@ -172,25 +184,26 @@
       </div>
     </div>
 
-    <!-- ✅ Filters (بعد Vendors Unique) -->
+    <!-- ✅ Filters -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">الفلاتر</div>
       <div class="filters" style="margin-top:8px;">
         <div class="filter-row">
 
+          <!-- ✅ vendor filter: search style (multi-term), with datalist convenience -->
           <label>المورد/المقاول:
-            <input id="vendor" list="vendorsList" placeholder="اكتب للبحث أو افتح القائمة" />
+            <input id="vendor" list="vendorsList" placeholder="بحث (جزء من مسلسل/كود/اسم)... مثال: 7 مقاول" />
             <datalist id="vendorsList"></datalist>
           </label>
 
+          <!-- ✅ status: validation only -->
           <label>الحالة:
-            <input id="status" list="statusList" placeholder="اكتب للبحث أو افتح القائمة" />
-            <datalist id="statusList">
-              <option value=""></option>
-              <option value="مسدد"></option>
-              <option value="متأخر"></option>
-              <option value="قادم"></option>
-            </datalist>
+            <select id="status">
+              <option value="">الكل</option>
+              <option value="مسدد">مسدد</option>
+              <option value="متأخر">متأخر</option>
+              <option value="قادم">قادم</option>
+            </select>
           </label>
 
           <label>من (ddmmyyyy):
@@ -229,9 +242,18 @@
       <div class="small" style="margin-top:8px;">اضغط على أي Vendor لعرض تفاصيل بنوده.</div>
     </div>
 
-    <!-- ✅ Vendors all details (آخر جزء) -->
+    <!-- ✅ Details Table + Pagination -->
     <div class="card" style="margin-top:12px;">
       <div class="card-title">تفاصيل المستحقات (مجمعة Vendor + Date)</div>
+
+      <div class="mini-controls" style="margin-top:10px;">
+        <div class="pager">
+          <button id="det_prev">Prev</button>
+          <span class="small" id="det_page_info">—</span>
+          <button id="det_next">Next</button>
+        </div>
+      </div>
+
       <div class="table-wrap" style="margin-top:10px;">
         <table>
           <thead>
