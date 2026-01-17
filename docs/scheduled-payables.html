@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=43">
+  <link rel="stylesheet" href="./assets/css/main.css?v=44">
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
@@ -33,8 +33,8 @@
     .clickable-row{cursor:pointer}
     .clickable-row:hover{filter:brightness(1.06)}
 
-    /* ✅ Popup: max 15 rows + scroll (applies to ALL popups) */
-    #spModal .modal{width:min(1100px,96vw); max-height:78vh;}
+    /* ✅ Popup: max-height + scroll (approx ~15 rows depending on screen) */
+    #spModal .modal{width:min(1150px,96vw); max-height:78vh;}
     #spModal .modal-body{overflow:auto; max-height:62vh;}
   </style>
 </head>
@@ -47,7 +47,7 @@
 
   <div class="container">
 
-    <!-- ✅ NAV (بنفس الترتيب) -->
+    <!-- ✅ NAV (بنفس الترتيب اللي انت كتبه) -->
     <div class="topbar">
       <div class="nav-top nav-fixed">
         <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
@@ -125,17 +125,22 @@
       <div class="card-title">الفلاتر</div>
       <div class="filters" style="margin-top:8px;">
         <div class="filter-row">
+
+          <!-- ✅ Vendor searchable validation list -->
           <label>المورد/المقاول:
-            <select id="vendor"></select>
+            <input id="vendor" list="vendorsList" placeholder="اكتب للبحث أو افتح القائمة" />
+            <datalist id="vendorsList"></datalist>
           </label>
 
+          <!-- ✅ Status searchable validation list -->
           <label>الحالة:
-            <select id="status">
-              <option value="">الكل</option>
-              <option value="مسدد">مسدد</option>
-              <option value="متأخر">متأخر</option>
-              <option value="قادم">قادم</option>
-            </select>
+            <input id="status" list="statusList" placeholder="اكتب للبحث أو افتح القائمة" />
+            <datalist id="statusList">
+              <option value=""></option>
+              <option value="مسدد"></option>
+              <option value="متأخر"></option>
+              <option value="قادم"></option>
+            </datalist>
           </label>
 
           <label>من (ddmmyyyy):
@@ -145,6 +150,12 @@
           <label>إلى (ddmmyyyy):
             <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025" />
           </label>
+
+          <!-- ✅ Clear Filters -->
+          <div class="btn-row" style="align-self:flex-end;">
+            <button id="clearFilters">Clear</button>
+          </div>
+
         </div>
 
         <div class="small"><span id="meta">—</span></div>
@@ -189,7 +200,7 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <div class="small" style="margin-top:8px;">اضغط على أي صف لعرض تفاصيل البنود (Code/Description).</div>
+      <div class="small" style="margin-top:8px;">الترتيب: المتأخر (الأقدم→الأحدث) ثم القادم (الأقرب→الأبعد) ثم المسدد (الأقدم→الأحدث).</div>
     </div>
 
     <!-- Modal -->
