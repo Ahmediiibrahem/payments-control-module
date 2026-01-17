@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scheduled Payables (Cash Out Plan)</title>
+
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/main.css?v=38">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-GCPTV6MHRT"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-GCPTV6MHRT');
+  </script>
+
+  <style>
+    .grid.kpi{grid-template-columns:repeat(4,1fr)}
+    @media(max-width:900px){.grid.kpi{grid-template-columns:repeat(2,1fr)}}
+    .grid.buckets{grid-template-columns:repeat(4,1fr)}
+    @media(max-width:900px){.grid.buckets{grid-template-columns:repeat(2,1fr)}}
+    .card-title{font-weight:800}
+  </style>
+</head>
+
+<body>
+  <script type="module">
+    import { requireAuth } from "./src/auth.js";
+    requireAuth();
+  </script>
+
+  <div class="container">
+
+    <div class="topbar">
+      <div class="nav-top nav-fixed">
+        <a class="nav-btn" href="./index.html">Cash Control Dashboard</a>
+        <a class="nav-btn" href="./email-analysis.html">E-Mails Analysis</a>
+        <a class="nav-btn" href="./insights.html">Executive Insights</a>
+        <a class="nav-btn" href="./scheduled-payables.html">Scheduled Payables</a>
+      </div>
+      <h1 class="page-title">Scheduled Payables (Cash Out Plan)</h1>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid kpi">
+      <div class="card kpi-card">
+        <div class="kpi-label">إجمالي المستحقات (Gross)</div>
+        <div class="kpi-value" id="kpi_gross">—</div>
+        <div class="kpi-sub" id="kpi_gross_cnt">—</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">المسدد (Paid)</div>
+        <div class="kpi-value" id="kpi_paid">—</div>
+        <div class="kpi-sub" id="kpi_paid_cnt">—</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">المتبقي (Outstanding)</div>
+        <div class="kpi-value" id="kpi_out">—</div>
+        <div class="kpi-sub" id="kpi_out_cnt">—</div>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-label">مستحق ومتأخر (Overdue)</div>
+        <div class="kpi-value" id="kpi_overdue">—</div>
+        <div class="kpi-sub" id="kpi_overdue_cnt">—</div>
+      </div>
+    </div>
+
+    <!-- Buckets -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">القادم حسب المدة (بناءً على source_request_date)</div>
+      <div class="grid buckets" style="margin-top:10px;">
+        <div class="card kpi-card">
+          <div class="kpi-label">خلال 7 أيام</div>
+          <div class="kpi-value" id="b7_amt">—</div>
+          <div class="kpi-sub" id="b7_cnt">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">خلال 14 يوم</div>
+          <div class="kpi-value" id="b14_amt">—</div>
+          <div class="kpi-sub" id="b14_cnt">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">خلال 30 يوم</div>
+          <div class="kpi-value" id="b30_amt">—</div>
+          <div class="kpi-sub" id="b30_cnt">—</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-label">بعد 30 يوم</div>
+          <div class="kpi-value" id="b30p_amt">—</div>
+          <div class="kpi-sub" id="b30p_cnt">—</div>
+        </div>
+      </div>
+      <div class="small" style="margin-top:8px;">ملاحظة: البنود المتأخرة تظهر في كارت Overdue بالأعلى، ولا تدخل ضمن Buckets القادمة.</div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">الفلاتر</div>
+      <div class="filters" style="margin-top:8px;">
+        <div class="filter-row">
+          <label>المورد/المقاول:
+            <select id="vendor"></select>
+          </label>
+
+          <label>من (ddmmyyyy):
+            <input id="date_from_txt" inputmode="numeric" placeholder="مثال: 12012025" />
+          </label>
+
+          <label>إلى (ddmmyyyy):
+            <input id="date_to_txt" inputmode="numeric" placeholder="مثال: 31012025" />
+          </label>
+
+          <label style="align-self:flex-end;">
+            <span style="display:flex;gap:8px;align-items:center;">
+              <input id="show_settled" type="checkbox" />
+              إظهار البنود المسددة بالكامل
+            </span>
+          </label>
+
+          <div class="btn-row" style="align-self:flex-end;">
+            <button id="clearBtn">مسح</button>
+            <button id="exportBtn">تصدير CSV</button>
+          </div>
+        </div>
+
+        <div class="small"><span id="meta">—</span></div>
+      </div>
+    </div>
+
+    <!-- Top 5 Vendors -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Top 5 Vendors (Outstanding)</div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>المورد/المقاول</th>
+              <th>المتبقي</th>
+              <th>عدد البنود</th>
+            </tr>
+          </thead>
+          <tbody id="top_vendors"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Main Table -->
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">تفاصيل المستحقات (مجمعة Vendor + Date)</div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>المورد/المقاول</th>
+              <th>Gross</th>
+              <th>Paid</th>
+              <th>Outstanding</th>
+              <th>الحالة</th>
+              <th>أيام</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="small" style="margin-top:8px;">اضغط على أي صف لعرض تفاصيل السطور (المقاول + تأمين الأعمال.. إلخ).</div>
+    </div>
+
+    <!-- Modal -->
+    <div id="spModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal">
+        <div class="modal-head">
+          <div>
+            <div id="spModalTitle" class="modal-title">—</div>
+            <div id="spModalSub" class="modal-sub">—</div>
+          </div>
+          <button id="spModalClose" class="modal-close" aria-label="Close">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>م</th>
+                  <th>الكود</th>
+                  <th>بند الحسابات</th>
+                  <th>القيمة</th>
+                  <th>المنصرف</th>
+                  <th>المتبقي</th>
+                </tr>
+              </thead>
+              <tbody id="spModalRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script type="module" src="./src/scheduled_payables.js"></script>
+</body>
+</html>
