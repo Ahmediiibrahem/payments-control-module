@@ -81,9 +81,10 @@
         }
 
         // بعد نجاح الدخول: لو فيه redirect مخزن يرجع له، وإلا يروح للـ dashboard
-        const next = sessionStorage.getItem("nextUrl") || "./index.html";
-        sessionStorage.removeItem("nextUrl");
+        const next = sessionStorage.getItem("pc_next") || "./index.html";
+        sessionStorage.removeItem("pc_next");
         window.location.href = next;
+
 
       } catch (err) {
         console.error(err);
