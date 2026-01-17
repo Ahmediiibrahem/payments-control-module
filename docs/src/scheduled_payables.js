@@ -40,6 +40,7 @@ function parseDateSmart(txt){
   const s0 = String(txt).trim();
   if (!s0) return null;
 
+  // Excel serial
   if (/^\d+(\.\d+)?$/.test(s0)) {
     const num = Number(s0);
     if (num > 20000 && num < 80000) {
@@ -49,17 +50,20 @@ function parseDateSmart(txt){
     }
   }
 
+  // ISO
   if (/^\d{4}-\d{2}-\d{2}/.test(s0)){
     const d = new Date(s0);
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // DD/MM/YYYY or DD-MM-YYYY
   const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(s0);
   if (m){
     const d = new Date(Date.UTC(+m[3], +m[2]-1, +m[1]));
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // 8 digits: ddmmyyyy or yyyymmdd
   const digits = s0.replace(/\D/g, "");
   if (digits.length === 8){
     const yyyy = +digits.slice(0,4);
@@ -97,7 +101,30 @@ function parseCSV(text){
   return res.data || [];
 }
 
+function todayUTC0(){
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+function daysBetweenUTC(d, baseUTC0){
+  const ms = 24*60*60*1000;
+  return Math.ceil((d.getTime() - baseUTC0.getTime()) / ms);
+}
+function statusOf(out, date, t0){
+  if (out <= 0) return "مسدد";
+  if (date.getTime() < t0.getTime()) return "متأخر";
+  return "قادم";
+}
+
+// ---------- State ----------
+let RAW = [];        // line-level after filtering request_id contains "مستحقات"
+let GROUPS_ALL = []; // grouped by vendor+date (for main table & KPIs)
+
+function isScheduledPayable(r){
+  return normText(r.request_id).includes(normText("مستحقات"));
+}
+
 function mapRow(raw){
+  // normalize headers + schema map
   const mapped = {};
   for (const [k, v] of Object.entries(raw || {})){
     const kk = normalizeHeaderKey(k);
@@ -107,43 +134,30 @@ function mapRow(raw){
 
   const request_id = String(mapped.request_id ?? "").trim();
   const vendor = String(mapped.vendor ?? "").trim();
+
+  // ✅ code + Description كما طلبت
   const code = String(mapped.code ?? "").trim();
-  const account_item = String(mapped.account_item ?? "").trim();
+  const description = String(mapped.Description ?? mapped.description ?? "").trim();
 
   const d = parseDateSmart(mapped.source_request_date);
+
   const amount_total = toNumber(mapped.amount_total);
   const amount_paid = toNumber(mapped.amount_paid);
   const amount_canceled = toNumber(mapped.amount_canceled);
 
-  const gross = Math.max(0, amount_total - amount_canceled);
-  const out = Math.max(0, gross - amount_paid);
+  const value = Math.max(0, amount_total - amount_canceled);
+  const paid = Math.max(0, amount_paid);
+  const out = Math.max(0, value - paid);
 
-  return { request_id, vendor, code, account_item, date: d, gross, paid: amount_paid, out };
+  return { request_id, vendor, code, description, date: d, value, paid, out };
 }
 
-// ---------- State ----------
-let RAW = [];
-let GROUPS_ALL = [];
-
-function isScheduledPayable(r){
-  return normText(r.request_id).includes(normText("مستحقات"));
-}
-
-function todayUTC0(){
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
-
-function daysBetweenUTC(d, baseUTC0){
-  const ms = 24*60*60*1000;
-  return Math.ceil((d.getTime() - baseUTC0.getTime()) / ms);
-}
-
-// Group by Vendor + source_request_date
+// Group by Vendor + Date (عشان (مقاول + تأمين الأعمال) يتجمعوا)
 function group(rows){
   const m = new Map();
   for (const r of rows){
-    if (!r.vendor || !(r.date instanceof Date) || isNaN(r.date.getTime())) continue;
+    if (!r.vendor) continue;
+    if (!(r.date instanceof Date) || isNaN(r.date.getTime())) continue;
 
     const key = `${normText(r.vendor)}|||${dayLabel(r.date)}`;
     if (!m.has(key)){
@@ -160,7 +174,7 @@ function group(rows){
       });
     }
     const g = m.get(key);
-    g.gross += r.gross;
+    g.gross += r.value;
     g.paid += r.paid;
     g.out += r.out;
     g.lines.push(r);
@@ -193,23 +207,24 @@ function openModal(){
   document.addEventListener("keydown", onEsc);
 }
 
-function renderModal(g){
-  $("spModalTitle").textContent = `${g.vendor} — ${g.dateLabel}`;
-  $("spModalSub").textContent = `Gross: ${fmtMoney(g.gross)} | Paid: ${fmtMoney(g.paid)} | Outstanding: ${fmtMoney(g.out)}`;
+function renderLinesModal(title, sub, lines){
+  $("spModalTitle").textContent = title;
+  $("spModalSub").textContent = sub;
 
-  const rows = g.lines.map((r, i)=>{
-    const rem = Math.max(0, r.gross - r.paid);
+  const rows = (lines || []).map((r, i)=>{
+    const dateTxt = r.date ? dayLabel(r.date) : "—";
     return `
       <tr>
         <td>${i+1}</td>
         <td>${escHtml(r.code || "—")}</td>
-        <td>${escHtml(r.account_item || "—")}</td>
-        <td>${fmtMoney(r.gross)}</td>
+        <td>${escHtml(r.description || "—")}</td>
+        <td>${dateTxt}</td>
+        <td>${fmtMoney(r.value)}</td>
         <td>${fmtMoney(r.paid)}</td>
-        <td>${fmtMoney(rem)}</td>
+        <td>${fmtMoney(r.out)}</td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="6">لا توجد بيانات</td></tr>`;
+  }).join("") || `<tr><td colspan="7">لا توجد بيانات</td></tr>`;
 
   $("spModalRows").innerHTML = rows;
   openModal();
@@ -219,12 +234,12 @@ function getFilters(){
   const v = $("vendor").value;
   const from = parseDateSmart($("date_from_txt").value);
   const to = parseDateSmart($("date_to_txt").value);
-  const showSettled = $("show_settled").checked;
+  const status = $("status").value; // "", "مسدد", "متأخر", "قادم"
 
   const fromUTC = from ? new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(), 0,0,0)) : null;
   const toUTC = to ? new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate(), 23,59,59)) : null;
 
-  return { vKey: normText(v), fromUTC, toUTC, showSettled };
+  return { vKey: normText(v), fromUTC, toUTC, status };
 }
 
 function inRange(d, fromUTC, toUTC){
@@ -234,17 +249,43 @@ function inRange(d, fromUTC, toUTC){
   return true;
 }
 
-function applyFilters(groups){
-  const { vKey, fromUTC, toUTC, showSettled } = getFilters();
-  return groups.filter(g=>{
-    if (vKey && g.vendorKey !== vKey) return false;
-    if ((fromUTC || toUTC) && !inRange(g.date, fromUTC, toUTC)) return false;
-    if (!showSettled && g.out <= 0) return false;
+// line-level filter (for popups)
+function filteredLines(){
+  const { vKey, fromUTC, toUTC, status } = getFilters();
+  const t0 = todayUTC0();
+
+  return RAW.filter(r=>{
+    if (vKey && normText(r.vendor) !== vKey) return false;
+    if ((fromUTC || toUTC) && !inRange(r.date, fromUTC, toUTC)) return false;
+
+    if (status){
+      const st = statusOf(r.out, r.date, t0);
+      if (st !== status) return false;
+    }
     return true;
   });
 }
 
+// group-level filter (for main table, KPIs, top5)
+function filteredGroups(){
+  const { vKey, fromUTC, toUTC, status } = getFilters();
+  const t0 = todayUTC0();
+
+  return GROUPS_ALL.filter(g=>{
+    if (vKey && g.vendorKey !== vKey) return false;
+    if ((fromUTC || toUTC) && !inRange(g.date, fromUTC, toUTC)) return false;
+
+    if (status){
+      const st = statusOf(g.out, g.date, t0);
+      if (st !== status) return false;
+    }
+    return true;
+  });
+}
+
+// ------- KPI + buckets -------
 function renderKPIs(groups){
+  // ✅ Gross = كامل (سواء اتسدد أو لا)
   const gross = groups.reduce((a,g)=>a+g.gross,0);
   const paid = groups.reduce((a,g)=>a+g.paid,0);
   const out = groups.reduce((a,g)=>a+g.out,0);
@@ -283,10 +324,10 @@ function renderBuckets(groups){
   for (const g of groups){
     if (g.out <= 0) continue;
 
-    // Overdue excluded from buckets
+    // overdue excluded
     if (g.date.getTime() < t0.getTime()) continue;
 
-    const days = daysBetweenUTC(g.date, t0); // 0 = today
+    const days = daysBetweenUTC(g.date, t0);
     if (days <= 7) { buckets.b7.amt += g.out; buckets.b7.cnt++; continue; }
     if (days <= 14){ buckets.b14.amt += g.out; buckets.b14.cnt++; continue; }
     if (days <= 30){ buckets.b30.amt += g.out; buckets.b30.cnt++; continue; }
@@ -306,11 +347,12 @@ function renderBuckets(groups){
   $("b30p_cnt").textContent = `عدد البنود: ${buckets.b30p.cnt}`;
 }
 
+// ------- Top 5 Vendors -------
 function renderTopVendors(groups){
   const by = new Map();
   for (const g of groups){
-    if (g.out <= 0) continue;
-    if (!by.has(g.vendorKey)) by.set(g.vendorKey, { vendor:g.vendor, out:0, cnt:0 });
+    if (g.out <= 0) continue; // Outstanding فقط
+    if (!by.has(g.vendorKey)) by.set(g.vendorKey, { vendor:g.vendor, vendorKey:g.vendorKey, out:0, cnt:0 });
     const x = by.get(g.vendorKey);
     x.out += g.out;
     x.cnt += 1;
@@ -318,32 +360,64 @@ function renderTopVendors(groups){
   const top = Array.from(by.values()).sort((a,b)=>b.out - a.out).slice(0,5);
 
   $("top_vendors").innerHTML = top.map((x,i)=>`
-    <tr>
+    <tr class="clickable-row" data-vkey="${escHtml(x.vendorKey)}">
       <td>${i+1}</td>
       <td>${escHtml(x.vendor)}</td>
       <td>${fmtMoney(x.out)}</td>
       <td>${x.cnt}</td>
     </tr>
   `).join("") || `<tr><td colspan="4">لا توجد بيانات</td></tr>`;
+
+  $("top_vendors").onclick = (e)=>{
+    const tr = e.target.closest("tr[data-vkey]");
+    if (!tr) return;
+    const vkey = tr.getAttribute("data-vkey");
+    const t0 = todayUTC0();
+
+    // نفس الفلاتر الحالية + vendor المختار + Outstanding فقط
+    const { fromUTC, toUTC, status } = getFilters();
+
+    const lines = RAW.filter(r=>{
+      if (normText(r.vendor) !== vkey) return false;
+      if ((fromUTC || toUTC) && !inRange(r.date, fromUTC, toUTC)) return false;
+
+      // status filter (لو متحدد)
+      if (status){
+        const st = statusOf(r.out, r.date, t0);
+        if (st !== status) return false;
+      }
+      // Top 5 أساساً Outstanding
+      return r.out > 0;
+    }).sort((a,b)=> (b.out||0)-(a.out||0));
+
+    const outSum = lines.reduce((a,r)=>a+r.out,0);
+    const paidSum = lines.reduce((a,r)=>a+r.paid,0);
+    const valSum = lines.reduce((a,r)=>a+r.value,0);
+
+    renderLinesModal(
+      `تفاصيل Vendor: ${lines[0]?.vendor || "—"}`,
+      `القيمة: ${fmtMoney(valSum)} | المنصرف: ${fmtMoney(paidSum)} | المتبقي: ${fmtMoney(outSum)} | عدد البنود: ${lines.length}`,
+      lines
+    );
+  };
 }
 
+// ------- Main table -------
 function renderTable(groups){
   const t0 = todayUTC0();
 
   const sorted = groups.slice().sort((a,b)=>{
     const ad = a.date?.getTime() || 0;
     const bd = b.date?.getTime() || 0;
-    if (ad !== bd) return ad - bd; // أقدم -> أحدث (لأنها التزامات)
+    if (ad !== bd) return ad - bd; // التزامات: الأقدم للأحدث
     return (b.out||0) - (a.out||0);
   });
 
   $("rows").innerHTML = sorted.map(g=>{
-    const isOverdue = g.out>0 && g.date.getTime() < t0.getTime();
-    const isSettled = g.out <= 0;
-    const days = daysBetweenUTC(g.date, t0);
-    const daysTxt = isSettled ? "—" : (isOverdue ? Math.abs(days) : days);
+    const st = statusOf(g.out, g.date, t0);
 
-    const status = isSettled ? "مسدد" : (isOverdue ? "متأخر" : "قادم");
+    const days = daysBetweenUTC(g.date, t0);
+    const daysTxt = (st === "مسدد") ? "—" : (st === "متأخر" ? Math.abs(days) : days);
 
     return `
       <tr class="clickable-row" data-key="${escHtml(g.key)}">
@@ -352,7 +426,7 @@ function renderTable(groups){
         <td>${fmtMoney(g.gross)}</td>
         <td>${fmtMoney(g.paid)}</td>
         <td>${fmtMoney(g.out)}</td>
-        <td>${status}</td>
+        <td>${st}</td>
         <td>${daysTxt}</td>
       </tr>
     `;
@@ -363,60 +437,91 @@ function renderTable(groups){
     if (!tr) return;
     const key = tr.getAttribute("data-key");
     const g = sorted.find(x=>x.key===key);
-    if (g) renderModal(g);
+    if (!g) return;
+
+    // تفاصيل المجموعة = lines
+    const lines = (g.lines || []).slice().sort((a,b)=> (b.out||0)-(a.out||0));
+    const valSum = lines.reduce((a,r)=>a+r.value,0);
+    const paidSum = lines.reduce((a,r)=>a+r.paid,0);
+    const outSum = lines.reduce((a,r)=>a+r.out,0);
+
+    renderLinesModal(
+      `${g.vendor} — ${g.dateLabel}`,
+      `القيمة: ${fmtMoney(valSum)} | المنصرف: ${fmtMoney(paidSum)} | المتبقي: ${fmtMoney(outSum)} | عدد البنود: ${lines.length}`,
+      lines
+    );
   };
 }
 
 function renderMeta(allGroups, shownGroups){
-  const totalAll = allGroups.length;
-  const totalShown = shownGroups.length;
-  $("meta").textContent = `المعروض: ${totalShown} من ${totalAll} | Vendor: ${$("vendor").selectedOptions[0]?.textContent || "الكل"}`;
+  $("meta").textContent =
+    `المعروض: ${shownGroups.length} من ${allGroups.length} | Vendor: ${$("vendor").selectedOptions[0]?.textContent || "الكل"} | حالة: ${$("status").selectedOptions[0]?.textContent || "الكل"}`;
 }
 
-function exportCSV(groups){
-  const header = ["date","vendor","gross","paid","outstanding","lines_count"];
-  const rows = groups.map(g=>[
-    g.dateLabel,
-    g.vendor,
-    String(Math.round(g.gross||0)),
-    String(Math.round(g.paid||0)),
-    String(Math.round(g.out||0)),
-    String(g.lines.length)
-  ]);
+// ------- Popups for 8 cards (click on sub text) -------
+function popupFor(type){
+  const t0 = todayUTC0();
+  const lines = filteredLines();
 
-  const csv = [header.join(","), ...rows.map(r=>r.map(x=>{
-    const s = String(x ?? "");
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
-  }).join(","))].join("\n");
+  let filtered = [];
+  let title = "";
+  if (type === "gross"){
+    filtered = lines.slice(); // كل البنود
+    title = "تفاصيل إجمالي المستحقات (Gross)";
+  } else if (type === "paid"){
+    filtered = lines.filter(r => r.paid > 0);
+    title = "تفاصيل المسدد (Paid)";
+  } else if (type === "out"){
+    filtered = lines.filter(r => r.out > 0);
+    title = "تفاصيل المتبقي (Outstanding)";
+  } else if (type === "overdue"){
+    filtered = lines.filter(r => r.out > 0 && r.date.getTime() < t0.getTime());
+    title = "تفاصيل المستحق والمتأخر (Overdue)";
+  } else if (type === "b7" || type === "b14" || type === "b30" || type === "b30p"){
+    const maxDays = (type === "b7") ? 7 : (type === "b14") ? 14 : (type === "b30") ? 30 : Infinity;
+    title =
+      type === "b7" ? "تفاصيل القادم خلال 7 أيام" :
+      type === "b14" ? "تفاصيل القادم خلال 14 يوم" :
+      type === "b30" ? "تفاصيل القادم خلال 30 يوم" :
+      "تفاصيل القادم بعد 30 يوم";
 
-  const blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "scheduled_payables.csv";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+    filtered = lines.filter(r=>{
+      if (r.out <= 0) return false;
+      if (r.date.getTime() < t0.getTime()) return false; // overdue خارج البكت
+      const days = daysBetweenUTC(r.date, t0);
+      if (maxDays === Infinity) return days > 30;
+      return days <= maxDays;
+    });
+  } else {
+    return;
+  }
+
+  filtered.sort((a,b)=> (b.out||0)-(a.out||0));
+
+  const valSum = filtered.reduce((a,r)=>a+r.value,0);
+  const paidSum = filtered.reduce((a,r)=>a+r.paid,0);
+  const outSum = filtered.reduce((a,r)=>a+r.out,0);
+
+  renderLinesModal(
+    title,
+    `القيمة: ${fmtMoney(valSum)} | المنصرف: ${fmtMoney(paidSum)} | المتبقي: ${fmtMoney(outSum)} | عدد البنود: ${filtered.length}`,
+    filtered
+  );
 }
 
 function wire(){
   $("vendor").addEventListener("change", render);
+  $("status").addEventListener("change", render);
+
   $("date_from_txt").addEventListener("input", render);
   $("date_to_txt").addEventListener("input", render);
-  $("show_settled").addEventListener("change", render);
 
-  $("clearBtn").addEventListener("click", ()=>{
-    $("vendor").value = "";
-    $("date_from_txt").value = "";
-    $("date_to_txt").value = "";
-    $("show_settled").checked = false;
-    render();
-  });
-
-  $("exportBtn").addEventListener("click", ()=>{
-    const shown = applyFilters(GROUPS_ALL);
-    exportCSV(shown);
+  // ✅ 8 cards: click on the subtitle only
+  document.querySelectorAll("[data-popup]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const type = el.getAttribute("data-popup");
+      popupFor(type);
+    });
   });
 }
 
@@ -428,7 +533,9 @@ async function init(){
   }
 
   const text = await res.text();
-  RAW = parseCSV(text).map(mapRow).filter(isScheduledPayable);
+  RAW = parseCSV(text)
+    .map(mapRow)
+    .filter(isScheduledPayable);
 
   GROUPS_ALL = group(RAW);
 
@@ -440,12 +547,13 @@ async function init(){
 }
 
 function render(){
-  const shown = applyFilters(GROUPS_ALL);
-  renderKPIs(shown);
-  renderBuckets(shown);
-  renderTopVendors(shown);
-  renderTable(shown);
-  renderMeta(GROUPS_ALL, shown);
+  const shownGroups = filteredGroups();
+
+  renderKPIs(shownGroups);
+  renderBuckets(shownGroups);
+  renderTopVendors(shownGroups);
+  renderTable(shownGroups);
+  renderMeta(GROUPS_ALL, shownGroups);
 }
 
 init();
